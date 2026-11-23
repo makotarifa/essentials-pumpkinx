@@ -3,6 +3,7 @@
 use crate::{
     extras::AfkInfo,
     host::{self, with_state},
+    i18n,
     logic::uuid_string,
 };
 use pumpkin_plugin_api::{
@@ -78,12 +79,12 @@ impl EventHandler<ev::PlayerMoveEvent> for Move {
             })
             .unwrap_or((None, false));
             if cancelled.is_some() {
-                cancelled_msg(&server, key, "Teleport cancelled: you moved.");
+                cancelled_msg(&server, key, i18n::tr("Teleportación cancelada: te has movido.", "Teleport cancelled: you moved."));
             }
             if afk {
                 apply_display_name(&data.player, current_nick(key).as_deref(), false);
                 if with_state(|state| state.cfg.afk_broadcast).unwrap_or(false) {
-                    server.broadcast(&format!("* {name} is no longer AFK."));
+                    server.broadcast(&i18n::trf("* {} ya no está AFK.", "* {} is no longer AFK.", &[&name]));
                 }
             }
         }
@@ -96,7 +97,7 @@ impl EventHandler<ev::EntityDamageEvent> for Damage {
     fn handle(&self, server: Server, data: d::EntityDamageEventData) -> d::EntityDamageEventData {
         if !data.cancelled {
             if let Some((key, _)) = with_state(|state| state.warmups.on_damage(data.entity_id)).flatten() {
-                cancelled_msg(&server, key, "Teleport cancelled: you took damage.");
+                cancelled_msg(&server, key, i18n::tr("Teleportación cancelada: has recibido daño.", "Teleport cancelled: you took damage."));
             }
         }
         data
@@ -136,13 +137,13 @@ impl EventHandler<ev::PlayerChatEvent> for Chat {
         })
         .unwrap_or((None, false));
         if let Some(reason) = muted {
-            let why = if reason.is_empty() { "Estás silenciado.".into() } else { format!("Estás silenciado: {reason}") };
+            let why = if reason.is_empty() { i18n::tr("Estás silenciado.", "You are muted.").into() } else { i18n::trf("Estás silenciado: {}", "You are muted: {}", &[&reason]) };
             data.player.send_system_message(TextComponent::text(&why), false);
             data.cancelled = true;
             return data;
         }
         if jailed {
-            data.player.send_system_message(TextComponent::text("Estás encarcelado; no puedes hablar."), false);
+            data.player.send_system_message(TextComponent::text(i18n::tr("Estás encarcelado; no puedes hablar.", "You are jailed; you cannot talk.")), false);
             data.cancelled = true;
             return data;
         }
@@ -159,7 +160,7 @@ impl EventHandler<ev::PlayerChatEvent> for Chat {
         if cleared {
             apply_display_name(&data.player, current_nick(key).as_deref(), false);
             if with_state(|state| state.cfg.afk_broadcast).unwrap_or(false) {
-                server.broadcast(&format!("* {name} is no longer AFK."));
+                server.broadcast(&i18n::trf("* {} ya no está AFK.", "* {} is no longer AFK.", &[&name]));
             }
         }
         data
@@ -202,7 +203,7 @@ impl EventHandler<ev::PlayerJoinEvent> for Join {
 
         let (ban, back, fly, afk, nick, vanish, god, jail_loc) = snapshot;
         if let Some(record) = ban {
-            let why = if record.reason.is_empty() { "Baneado temporalmente.".into() } else { format!("Baneado: {}", record.reason) };
+            let why = if record.reason.is_empty() { i18n::tr("Baneado temporalmente.", "Temporarily banned.").into() } else { i18n::trf("Baneado: {}", "Banned: {}", &[&record.reason]) };
             kick_player(&data.player, &why);
             return data;
         }
@@ -222,7 +223,7 @@ impl EventHandler<ev::PlayerJoinEvent> for Join {
         }
         apply_display_name(&data.player, nick.as_deref(), afk);
         if afk {
-            host::info(&data.player, "Your AFK status was restored.");
+            host::info(&data.player, i18n::tr("Se restauró tu estado AFK.", "Your AFK status was restored."));
         }
         if god {
             data.player.set_invulnerable(true);
@@ -265,9 +266,15 @@ impl EventHandler<ev::PlayerLeaveEvent> for Leave {
         let me = data.player.get_name();
         for r in dropped {
             let (other, msg) = if r.requester == key {
-                (r.target, format!("{me} left; their teleport request was cancelled."))
+                (
+                    r.target,
+                    i18n::trf("{} se ha ido; su solicitud de teletransporte fue cancelada.", "{} left; their teleport request was cancelled.", &[&me]),
+                )
             } else {
-                (r.requester, format!("{me} left; your teleport request was cancelled."))
+                (
+                    r.requester,
+                    i18n::trf("{} se ha ido; tu solicitud de teletransporte fue cancelada.", "{} left; your teleport request was cancelled.", &[&me]),
+                )
             };
             if let Some(player) = server.get_player_by_uuid(host::key_to_uuid(other)) {
                 host::info(&player, &msg);

@@ -4,6 +4,7 @@
 use crate::{
     commands,
     host::{self, with_state},
+    i18n,
     logic,
     store::persist::FileStore,
 };
@@ -82,7 +83,7 @@ fn tick(server: Server) {
 
     for (key, left) in counts {
         if let Some(player) = server.get_player_by_uuid(host::key_to_uuid(key)) {
-            player.show_actionbar(TextComponent::text(&format!("Teleporting in {left}s - don't move")).color_named(NamedColor::Gold));
+            player.show_actionbar(TextComponent::text(&i18n::trf("Teletransportando en {}s - no te muevas", "Teleporting in {}s - don't move", &[&left.to_string()])).color_named(NamedColor::Gold));
         }
     }
     for (key, w) in due {
@@ -92,7 +93,7 @@ fn tick(server: Server) {
     }
     for r in expired {
         if let Some(player) = server.get_player_by_uuid(host::key_to_uuid(r.requester)) {
-            host::info(&player, &format!("Your teleport request to {} expired.", r.target_name));
+            host::info(&player, &i18n::trf("Tu solicitud de teletransporte a {} ha caducado.", "Your teleport request to {} expired.", &[&r.target_name]));
         }
     }
 }

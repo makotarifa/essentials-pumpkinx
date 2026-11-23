@@ -6,6 +6,7 @@
 //! formats in memory (marking `needs_migration`), and the tick writes the
 //! canonical form later.
 
+use crate::i18n;
 use crate::store::persist::FileStore;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io, path::Path};
@@ -60,16 +61,16 @@ impl Default for Economy {
 pub fn parse_money(raw: &str, decimals: u8) -> Result<i64, String> {
     let text = raw.trim();
     if text.is_empty() || text.starts_with('-') {
-        return Err("La cantidad debe ser un número positivo.".into());
+        return Err(i18n::tr("La cantidad debe ser un número positivo.", "Amount must be a positive number.").into());
     }
-    let value: f64 = text.parse().map_err(|_| format!("Cantidad inválida: '{raw}'."))?;
+    let value: f64 = text.parse().map_err(|_| i18n::trf("Cantidad inválida: '{}'.", "Invalid amount: '{}'.", &[raw]))?;
     if !value.is_finite() {
-        return Err("Cantidad inválida.".into());
+        return Err(i18n::msg(i18n::INVALID_AMOUNT).into());
     }
     let factor = 10f64.powi(i32::from(decimals));
     let cents = (value * factor).round();
     if cents < 0.0 || cents > 9_000_000_000_000_000.0 {
-        return Err("Cantidad fuera de rango.".into());
+        return Err(i18n::tr("Cantidad fuera de rango.", "Amount out of range.").into());
     }
     Ok(cents as i64)
 }
@@ -100,7 +101,7 @@ pub fn balance_of(economy: &Economy, uuid: &str) -> i64 {
 
 pub fn set_balance(economy: &mut Economy, uuid: &str, amount: i64) -> Result<(), String> {
     if amount < 0 {
-        return Err("El saldo no puede ser negativo.".into());
+        return Err(i18n::tr("El saldo no puede ser negativo.", "Balance cannot be negative.").into());
     }
     economy.balances.insert(uuid.to_string(), amount);
     Ok(())
@@ -114,10 +115,10 @@ pub fn adjust(economy: &mut Economy, uuid: &str, delta: i64) -> Result<(), Strin
 /// Transfer between two UUIDs. Both balances must stay >= 0.
 pub fn transfer(economy: &mut Economy, from: &str, to: &str, amount: i64) -> Result<(), String> {
     if amount <= 0 {
-        return Err("La cantidad debe ser positiva.".into());
+        return Err(i18n::tr("La cantidad debe ser positiva.", "Amount must be positive.").into());
     }
     if balance_of(economy, from) < amount {
-        return Err("Saldo insuficiente.".into());
+        return Err(i18n::tr("Saldo insuficiente.", "Insufficient balance.").into());
     }
     adjust(economy, from, -amount)?;
     adjust(economy, to, amount)?;

@@ -51,6 +51,8 @@ pub struct Config {
     pub currency_symbol: String,
     /// Displayed decimals (internal amounts are fixed cents).
     pub currency_decimals: u8,
+    /// User-facing language: "en" or "es".
+    pub language: String,
 }
 
 impl Default for Config {
@@ -78,6 +80,7 @@ impl Default for Config {
             jails: BTreeMap::new(),
             currency_symbol: "$".into(),
             currency_decimals: 2,
+            language: "en".into(),
         }
     }
 }
@@ -102,6 +105,9 @@ impl Config {
         }
         if cfg.tpr_attempts == 0 {
             cfg.tpr_attempts = Self::default().tpr_attempts;
+        }
+        if !cfg.language.eq_ignore_ascii_case("en") && !cfg.language.eq_ignore_ascii_case("es") {
+            cfg.language = "en".into();
         }
         Ok(cfg)
     }

@@ -5,6 +5,7 @@ use crate::{
     },
     host::{self, with_state},
     logic::{self, CdKind, TpaKind, TpKind},
+    i18n,
 };
 use pumpkin_plugin_api::{
     command::{CommandError, CommandSender, ConsumedArgs},
@@ -21,10 +22,11 @@ use tracing::info;
 fn perform_accept(server: &Server, accepter: &Player, req: logic::TpaRequest) -> CmdResult {
     let requester = server.get_player_by_uuid(host::key_to_uuid(req.requester));
     let Some(r) = requester else {
-        return Err(fail(&format!("{} ya no está conectado.", req.requester_name)));
+        return Err(fail(&i18n::trf("{} ya no está conectado.", "{} is no longer online.", &[&req.requester_name])));
     };
-    host::ok(accepter, &format!("Aceptaste la petición de {}.", req.requester_name));
-    host::ok(&r, &format!("{} aceptó tu petición.", accepter.get_name()));
+    host::ok(accepter, &i18n::trf("Aceptaste la petición de {}.", "You accepted {}'s request.", &[&req.requester_name]));
+    let accepter_name = accepter.get_name();
+    host::ok(&r, &i18n::trf("{} aceptó tu petición.", "{} accepted your request.", &[&accepter_name]));
     let (mover, destination, label) = match req.kind {
         TpaKind::ToTarget => (&r, accepter, accepter.get_name()),
         TpaKind::ToRequester => (accepter, &r, r.get_name()),
@@ -38,10 +40,10 @@ fn send_tpa_request(sender: &CommandSender, server: &Server, args: &ConsumedArgs
     let target_name = plain(args.get_value("player"));
     let target = server
         .get_player_by_name(&target_name)
-        .ok_or_else(|| fail(&format!("Jugador '{target_name}' no conectado.")))?;
+        .ok_or_else(|| fail(&i18n::trf("Jugador '{}' no conectado.", "Player '{}' is not online.", &[&target_name])))?;
     let (key, tkey) = (host::key_of(&p), host::key_of(&target));
     if key == tkey {
-        return Err(fail("No puedes enviarte una petición de teletransporte a ti mismo."));
+        return Err(fail(i18n::tr("No puedes enviarte una petición de teletransporte a ti mismo.", "You cannot send a teleport request to yourself.")));
     }
     let (blocked, auto) = with_state(|s| {
         let uuid = logic::uuid_string(tkey);
@@ -52,7 +54,7 @@ fn send_tpa_request(sender: &CommandSender, server: &Server, args: &ConsumedArgs
     })
     .ok_or_else(unavailable)?;
     if blocked {
-        return Err(fail("Ese jugador tiene las peticiones de teletransporte desactivadas (/tptoggle)."));
+        return Err(fail(i18n::tr("Ese jugador tiene las peticiones de teletransporte desactivadas (/tptoggle).", "That player has teleport requests disabled (/tptoggle).")));
     }
     let left = cooldown_left(key, CdKind::Tpa);
     if left > 0 {
@@ -76,17 +78,18 @@ fn send_tpa_request(sender: &CommandSender, server: &Server, args: &ConsumedArgs
     if auto {
         let accepted = with_state(|s| s.tpas.take(tkey, Some(&me), host::now_ms())).ok_or_else(unavailable)?;
         if let Some(req) = accepted {
-            host::ok(&target, &format!("Petición de {me} aceptada automáticamente."));
+            host::ok(&target, &i18n::trf("Petición de {} aceptada automáticamente.", "Request from {} accepted automatically.", &[&me]));
             return perform_accept(server, &target, req);
         }
     }
-    host::ok(&p, &format!("Petición enviada a {them}. Caduca en {expire_secs}s."));
-    let verb = if here { "quiere que te teletransportes a él" } else { "quiere teletransportarse a ti" };
-    let msg = TextComponent::text(&format!("{me} {verb}. "))
+    let expire_s = expire_secs.to_string();
+    host::ok(&p, &i18n::trf("Petición enviada a {}. Caduca en {}s.", "Request sent to {}. Expires in {}s.", &[&them, &expire_s]));
+    let verb = if here { i18n::tr("quiere que te teletransportes a él", "wants you to teleport to them") } else { i18n::tr("quiere teletransportarse a ti", "wants to teleport to you") };
+    let msg = TextComponent::text(&i18n::trf("{} {}. ", "{} {}. ", &[&me, verb]))
         .color_named(NamedColor::Gold)
-        .add_child(button("[Aceptar]", NamedColor::Green, &format!("/tpaccept {me}"), "Aceptar la petición"))
+        .add_child(button(i18n::tr("[Aceptar]", "[Accept]"), NamedColor::Green, &format!("/tpaccept {me}"), i18n::tr("Aceptar la petición", "Accept the request")))
         .add_child(TextComponent::text(" "))
-        .add_child(button("[Denegar]", NamedColor::Red, &format!("/tpdeny {me}"), "Denegar la petición"));
+        .add_child(button(i18n::tr("[Denegar]", "[Deny]"), NamedColor::Red, &format!("/tpdeny {me}"), i18n::tr("Denegar la petición", "Deny the request")));
     target.send_system_message(msg, false);
     Ok(1)
 }
@@ -116,14 +119,14 @@ impl CommandHandler for TpReply {
         let (tkey, now) = (host::key_of(&p), host::now_ms());
         let req = with_state(|s| s.tpas.take(tkey, from.as_deref(), now))
             .ok_or_else(unavailable)?
-            .ok_or_else(|| fail("No tienes peticiones de teletransporte pendientes."))?;
+            .ok_or_else(|| fail(i18n::tr("No tienes peticiones de teletransporte pendientes.", "You have no pending teleport requests.")))?;
         let verb = if self.accept { "accept" } else { "deny" };
         info!("essentials: {} /tp{verb} {}", p.get_name(), req.requester_name);
         if !self.accept {
             let requester = server.get_player_by_uuid(host::key_to_uuid(req.requester));
-            host::ok(&p, &format!("Denegaste la petición de {}.", req.requester_name));
+            host::ok(&p, &i18n::trf("Denegaste la petición de {}.", "You denied {}'s request.", &[&req.requester_name]));
             if let Some(r) = requester {
-                host::err(&r, &format!("{} denegó tu petición de teletransporte.", p.get_name()));
+                host::err(&r, &i18n::trf("{} denegó tu petición de teletransporte.", "{} denied your teleport request.", &[&p.get_name()]));
             }
             return Ok(1);
         }
@@ -144,7 +147,7 @@ impl CommandHandler for TpToggleCmd {
             blocked
         })
         .ok_or_else(unavailable)?;
-        host::ok(&p, if now_blocked { "Las peticiones de teletransporte están ahora bloqueadas." } else { "Las peticiones de teletransporte están ahora permitidas." });
+        host::ok(&p, i18n::tr(if now_blocked { "Las peticiones de teletransporte están ahora bloqueadas." } else { "Las peticiones de teletransporte están ahora permitidas." }, if now_blocked { "Teleport requests are now blocked." } else { "Teleport requests are now allowed." }));
         Ok(1)
     }
 }
@@ -181,13 +184,14 @@ impl CommandHandler for TpaAllCmd {
                 continue;
             }
             sent += 1;
-            let msg = TextComponent::text(&format!("{name} quiere que te teletransportes a él. "))
-                .add_child(TextComponent::text("[Aceptar]").click_run_command(&format!("/tpaccept {name}")))
+            let msg = TextComponent::text(&i18n::trf("{} quiere que te teletransportes a él. ", "{} wants you to teleport to them. ", &[&name]))
+                .add_child(TextComponent::text(i18n::tr("[Aceptar]", "[Accept]")).click_run_command(&format!("/tpaccept {name}")))
                 .add_child(TextComponent::text(" "))
-                .add_child(TextComponent::text("[Denegar]").click_run_command(&format!("/tpdeny {name}")));
+                .add_child(TextComponent::text(i18n::tr("[Denegar]", "[Deny]")).click_run_command(&format!("/tpdeny {name}")));
             p.send_system_message(msg, false);
         }
-        say(&sender, &format!("Peticiones enviadas a {sent} jugador(es)."));
+        let sent_s = sent.to_string();
+        say(&sender, &i18n::trf("Peticiones enviadas a {} jugador(es).", "Requests sent to {} player(s).", &[&sent_s]));
         Ok(1)
     }
 }
@@ -201,9 +205,10 @@ impl CommandHandler for TpaCancelCmd {
         let count = with_state(|s| s.tpas.cancel_from(host::key_of(&me), target.as_deref(), host::now_ms()))
             .ok_or_else(unavailable)?;
         if count == 0 {
-            return Err(fail("No habías enviado esa petición."));
+            return Err(fail(i18n::tr("No habías enviado esa petición.", "You had not sent that request.")));
         }
-        say(&sender, &format!("Canceladas {count} petición(es)."));
+        let count_s = count.to_string();
+        say(&sender, &i18n::trf("Canceladas {} petición(es).", "Canceled {} request(s).", &[&count_s]));
         Ok(1)
     }
 }
@@ -221,8 +226,8 @@ impl CommandHandler for TpAutoCmd {
         };
         let first = tokens.first().copied();
         let (target, requested) = if tokens.len() > 1 || first.and_then(as_mode).is_none() {
-            let name = first.ok_or_else(|| fail("Uso: /tpauto [on|off] [jugador]"))?;
-            let other = server.get_player_by_name(name).ok_or_else(|| fail("Jugador no conectado."))?;
+            let name = first.ok_or_else(|| fail(i18n::tr("Uso: /tpauto [on|off] [jugador]", "Usage: /tpauto [on|off] [player]")))?;
+            let other = server.get_player_by_name(name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?;
             if host::key_of(&other) != host::key_of(&me) && !has_level(&sender, CmdLevel::Two) {
                 return Err(CommandError::PermissionDenied);
             }
@@ -238,9 +243,11 @@ impl CommandHandler for TpAutoCmd {
             state
         })
         .ok_or_else(unavailable)?;
+        let target_name = target.get_name();
+        let state = if now_on { i18n::tr("activado", "enabled") } else { i18n::tr("desactivado", "disabled") };
         say(
             &sender,
-            &format!("Auto-aceptar peticiones para {}: {}.", target.get_name(), if now_on { "activado" } else { "desactivado" }),
+            &i18n::trf("Auto-aceptar peticiones para {}: {}.", "Auto-accept requests for {}: {}.", &[&target_name, state]),
         );
         Ok(1)
     }
@@ -270,27 +277,27 @@ pub fn register(ctx: &Context) -> Result<(), String> {
     })?;
 
     let tpa = "pumpkin_essentials:tpa";
-    reg(ctx, one_arg(&["tpa"], "Pide teletransportarte a un jugador", "player", TpaCmd), tpa)?;
+    reg(ctx, one_arg(&["tpa"], i18n::tr("Pide teletransportarte a un jugador", "Ask to teleport to a player"), "player", TpaCmd), tpa)?;
     for (label, accept) in [("tpaccept", true), ("tpdeny", false)] {
-        let cmd = no_arg(&[label], "Responde a una petición de teletransporte", TpReply { accept, has_arg: false })
+        let cmd = no_arg(&[label], i18n::tr("Responde a una petición de teletransporte", "Respond to a teleport request"), TpReply { accept, has_arg: false })
             .then(word("player").execute(TpReply { accept, has_arg: true }));
         reg(ctx, cmd, tpa)?;
     }
-    reg(ctx, one_arg(&["tpahere"], "Pide a un jugador que se teletransporte a ti", "player", TpaHereCmd), "pumpkin_essentials:tpahere")?;
-    reg(ctx, no_arg(&["tptoggle"], "Bloquea o permite peticiones de teletransporte", TpToggleCmd), "pumpkin_essentials:tptoggle")?;
+    reg(ctx, one_arg(&["tpahere"], i18n::tr("Pide a un jugador que se teletransporte a ti", "Ask a player to teleport to you"), "player", TpaHereCmd), "pumpkin_essentials:tpahere")?;
+    reg(ctx, no_arg(&["tptoggle"], i18n::tr("Bloquea o permite peticiones de teletransporte", "Block or allow teleport requests"), TpToggleCmd), "pumpkin_essentials:tptoggle")?;
     reg(
         ctx,
-        Command::new(&["tpaall".to_string()], "Pedir a todos los jugadores que vengan").then(greedy_node("player").execute(TpaAllCmd)),
+        Command::new(&["tpaall".to_string()], i18n::tr("Pedir a todos los jugadores que vengan", "Ask all players to come")).then(greedy_node("player").execute(TpaAllCmd)),
         "pumpkin_essentials:tpaall",
     )?;
     reg(
         ctx,
-        Command::new(&["tpacancel".to_string()], "Cancelar peticiones enviadas").then(greedy_node("args").execute(TpaCancelCmd)),
+        Command::new(&["tpacancel".to_string()], i18n::tr("Cancelar peticiones enviadas", "Cancel sent requests")).then(greedy_node("args").execute(TpaCancelCmd)),
         "pumpkin_essentials:tpacancel",
     )?;
     reg(
         ctx,
-        Command::new(&["tpauto".to_string()], "Auto-aceptar peticiones").then(greedy_node("args").execute(TpAutoCmd)),
+        Command::new(&["tpauto".to_string()], i18n::tr("Auto-aceptar peticiones", "Auto-accept requests")).then(greedy_node("args").execute(TpAutoCmd)),
         "pumpkin_essentials:tpauto",
     )?;
     Ok(())

@@ -8,6 +8,7 @@
 use crate::{
     extras,
     host::{self, with_state},
+    i18n,
     logic,
 };
 use pumpkin_plugin_api::{
@@ -27,7 +28,7 @@ pub fn fail(msg: &str) -> CommandError {
 
 /// The command layer cannot run without the installed host state.
 pub fn unavailable() -> CommandError {
-    fail("Estado no disponible.")
+    fail(i18n::msg(i18n::UNAVAILABLE))
 }
 
 pub fn plain(arg: Arg) -> String {
@@ -46,7 +47,7 @@ pub fn say(sender: &CommandSender, msg: &str) {
 }
 
 pub fn player_of(sender: &CommandSender) -> Result<Player, CommandError> {
-    sender.as_player().ok_or_else(|| fail("Solo jugadores."))
+    sender.as_player().ok_or_else(|| fail(i18n::msg(i18n::ONLY_PLAYERS)))
 }
 
 pub fn has_level(sender: &CommandSender, level: CmdLevel) -> bool {
@@ -101,7 +102,7 @@ pub fn name_arg_or(args: &ConsumedArgs, default: &str) -> Result<String, Command
 
 /// A command node granted to ops may target another player only at gamemaster level.
 pub fn resolve_target(sender: &CommandSender, server: &Server, me: &Player, name: &str) -> Result<Player, CommandError> {
-    let target = server.get_player_by_name(name).ok_or_else(|| fail(&format!("Jugador '{name}' no conectado.")))?;
+    let target = server.get_player_by_name(name).ok_or_else(|| fail(&i18n::trf("Jugador '{}' no conectado.", "Player '{}' is not online.", &[name])))?;
     if host::key_of(&target) != host::key_of(me) && !sender.has_permission_level(CmdLevel::Two) {
         return Err(CommandError::PermissionDenied);
     }
@@ -124,7 +125,7 @@ pub fn target_of(sender: &CommandSender, server: &Server, _me: &Player, args: &C
         return Err(CommandError::PermissionDenied);
     }
     let name = plain(args.get_value("player"));
-    server.get_player_by_name(&name).ok_or_else(|| fail(&format!("Jugador '{name}' no conectado.")))
+    server.get_player_by_name(&name).ok_or_else(|| fail(&i18n::trf("Jugador '{}' no conectado.", "Player '{}' is not online.", &[&name])))
 }
 
 /// Like [`resolve_target`], but refuses to target yourself.
@@ -132,9 +133,9 @@ pub fn target_from_name(sender: &CommandSender, server: &Server, me: &Player, na
     if !has_level(sender, level) {
         return Err(CommandError::PermissionDenied);
     }
-    let target = server.get_player_by_name(name).ok_or_else(|| fail(&format!("Jugador '{name}' no conectado.")))?;
+    let target = server.get_player_by_name(name).ok_or_else(|| fail(&i18n::trf("Jugador '{}' no conectado.", "Player '{}' is not online.", &[name])))?;
     if host::key_of(&target) == host::key_of(me) {
-        return Err(fail("No puedes aplicarte esto a ti mismo."));
+        return Err(fail(i18n::tr("No puedes aplicarte esto a ti mismo.", "You cannot apply this to yourself.")));
     }
     Ok(target)
 }
@@ -166,7 +167,7 @@ pub fn cooldown_left(key: u128, kind: logic::CdKind) -> u64 {
 }
 
 pub fn cooldown_err(left: u64) -> CommandError {
-    fail(&format!("Debes esperar {left}s antes de volver a usarlo."))
+    fail(&i18n::trf("Debes esperar {}s antes de volver a usarlo.", "You must wait {}s before using it again.", &[&left.to_string()]))
 }
 
 pub fn button(label: &str, color: NamedColor, run: &str, hover: &str) -> TextComponent {
@@ -179,7 +180,7 @@ pub fn button(label: &str, color: NamedColor, run: &str, hover: &str) -> TextCom
 pub fn clickable_list(head: &str, names: &[String], cmd: &str, hover_verb: &str) -> TextComponent {
     let mut t = TextComponent::text(head).color_named(NamedColor::Gold);
     if names.is_empty() {
-        return t.add_child(TextComponent::text(" (ninguna)").color_named(NamedColor::Gray));
+        return t.add_child(TextComponent::text(i18n::tr(" (ninguna)", " (none)")).color_named(NamedColor::Gray));
     }
     for (i, n) in names.iter().enumerate() {
         let sep = if i == 0 { " " } else { ", " };
@@ -212,7 +213,7 @@ pub fn give_stack(player: &Player, key: &str, count: u8) -> CmdResult {
             break;
         }
     }
-    let slot = target.ok_or_else(|| fail("Inventario lleno."))?;
+    let slot = target.ok_or_else(|| fail(i18n::tr("Inventario lleno.", "Inventory full.")))?;
     inv.set_item(slot, Some(ItemStack::new(key, count)));
     Ok(1)
 }

@@ -1,4 +1,5 @@
 use crate::{
+    i18n::{self, Lang},
     cmdutil::{fail, greedy_arg, greedy_cmd, greedy_node, no_arg, optional_target, player_of, reg, resolve_target, say, target_of, unavailable, word, CmdResult},
     events,
     extras::{self, AfkInfo},
@@ -62,15 +63,21 @@ impl CommandHandler for AfkCmd {
             events::apply_display_name(&target, nick.as_deref(), now_afk);
         }
         if now_afk {
-            let suffix = if reason.is_empty() { String::new() } else { format!(": {reason}") };
             if broadcast {
-                server.broadcast(&format!("* {name} está ahora AFK{suffix}."));
+                if reason.is_empty() {
+                    server.broadcast(&i18n::trf("* {} está ahora AFK.", "* {} is now AFK.", &[&name]));
+                } else {
+                    server.broadcast(&i18n::trf("* {} está ahora AFK: {}.", "* {} is now AFK: {}.", &[&name, &reason]));
+                }
             }
         } else if broadcast {
-            server.broadcast(&format!("* {name} ya no está AFK."));
+            server.broadcast(&i18n::trf("* {} ya no está AFK.", "* {} is no longer AFK.", &[&name]));
         }
         let word = if now_afk { "AFK" } else { "no longer AFK" };
-        host::ok(&target, if now_afk { "Estás ahora AFK." } else { "Ya no estás AFK." });
+        host::ok(
+            &target,
+            if now_afk { i18n::tr("Estás ahora AFK.", "You are now AFK.") } else { i18n::tr("Ya no estás AFK.", "You are no longer AFK.") },
+        );
         info!("essentials: {} is {word}", name);
         Ok(1)
     }
@@ -89,9 +96,10 @@ impl CommandHandler for HealCmd {
         target.set_food_level(20);
         target.set_saturation(10.0);
         if other {
-            sender.send_message(TextComponent::text(&format!("Curado {}.", target.get_name())));
+            let name = target.get_name();
+            sender.send_message(TextComponent::text(&i18n::trf("Curado {}.", "Healed {}.", &[&name])));
         } else {
-            host::ok(&target, "Has sido curado.");
+            host::ok(&target, i18n::tr("Has sido curado.", "You have been healed."));
         }
         info!("essentials: {} healed {}", sender.get_name(), target.get_name());
         Ok(1)
@@ -110,9 +118,10 @@ impl CommandHandler for FeedCmd {
         target.set_saturation(10.0);
         target.set_exhaustion(0.0);
         if other {
-            sender.send_message(TextComponent::text(&format!("Alimentado {}.", target.get_name())));
+            let name = target.get_name();
+            sender.send_message(TextComponent::text(&i18n::trf("Alimentado {}.", "Fed {}.", &[&name])));
         } else {
-            host::ok(&target, "Has sido alimentado.");
+            host::ok(&target, i18n::tr("Has sido alimentado.", "You have been fed."));
         }
         info!("essentials: {} fed {}", sender.get_name(), target.get_name());
         Ok(1)
@@ -125,18 +134,19 @@ impl CommandHandler for SpeedCmd {
         let me = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         let mut tokens = raw.split_whitespace();
-        let first = tokens.next().ok_or_else(|| fail("Uso: /speed [jugador] <0.1-10.0>"))?;
+        let first = tokens.next().ok_or_else(|| fail(i18n::tr("Uso: /speed [jugador] <0.1-10.0>", "Usage: /speed [player] <0.1-10.0>")))?;
         let rest: Vec<&str> = tokens.collect();
         let (target, speed_raw) = if extras::parse_walk_speed(first).is_ok() {
             (me, first)
         } else if rest.len() == 1 && extras::parse_walk_speed(rest[0]).is_ok() {
             (resolve_target(&sender, &server, &me, first)?, rest[0])
         } else {
-            return Err(fail("Uso: /speed [jugador] <0.1-10.0>"));
+            return Err(fail(i18n::tr("Uso: /speed [jugador] <0.1-10.0>", "Usage: /speed [player] <0.1-10.0>")));
         };
         let value = extras::parse_walk_speed(speed_raw).map_err(|error| fail(&error))?;
         target.set_walk_speed(extras::engine_walk_speed(value));
-        host::ok(&target, &format!("Velocidad de caminata fijada en {value:.2}."));
+        let value_text = format!("{value:.2}");
+        host::ok(&target, &i18n::trf("Velocidad de caminata fijada en {}.", "Walk speed set to {}.", &[&value_text]));
         info!("essentials: {} speed {value:.2}", target.get_name());
         Ok(1)
     }
@@ -157,13 +167,14 @@ impl CommandHandler for ExpCmd {
                 let level = extras::parse_level(value).map_err(|error| fail(&error))?;
                 (resolve_target(&sender, &server, &me, name)?, Some(level))
             }
-            _ => return Err(fail("Uso: /exp [jugador] [nivel]")),
+            _ => return Err(fail(i18n::tr("Uso: /exp [jugador] [nivel]", "Usage: /exp [player] [level]"))),
         };
         let name = target.get_name();
         match level {
             Some(n) => {
                 target.set_experience_level(n);
-                let msg = format!("Nivel de experiencia de {name} fijado en {n}.");
+                let level_text = n.to_string();
+                let msg = i18n::trf("Nivel de experiencia de {} fijado en {}.", "Experience level of {} set to {}.", &[&name, &level_text]);
                 if host::key_of(&target) == me_key {
                     host::ok(&target, &msg);
                 } else {
@@ -172,10 +183,11 @@ impl CommandHandler for ExpCmd {
             }
             None => {
                 let current = target.get_experience_level();
+                let current_text = current.to_string();
                 let msg = if host::key_of(&target) == me_key {
-                    format!("Tu nivel de experiencia es {current}.")
+                    i18n::trf("Tu nivel de experiencia es {}.", "Your experience level is {}.", &[&current_text])
                 } else {
-                    format!("El nivel de experiencia de {name} es {current}.")
+                    i18n::trf("El nivel de experiencia de {} es {}.", "The experience level of {} is {}.", &[&name, &current_text])
                 };
                 sender.send_message(TextComponent::text(&msg));
             }
@@ -193,7 +205,7 @@ impl CommandHandler for RestCmd {
         let player = if self.target { target_of(&sender, &server, &me, &args, CmdLevel::Two)? } else { me };
         player.set_exhaustion(0.0);
         player.set_saturation(10.0);
-        host::info(&player, "Has descansado.");
+        host::info(&player, i18n::tr("Has descansado.", "You have rested."));
         Ok(1)
     }
 }
@@ -203,7 +215,10 @@ impl CommandHandler for BackupCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let dir = with_state(|state| state.dir.clone()).ok_or_else(unavailable)?;
         let target: PathBuf = dir.join("backups").join(host::now_ms().to_string());
-        fs::create_dir_all(&target).map_err(|error| fail(&format!("No se pudo crear la carpeta de backup: {error}")))?;
+        fs::create_dir_all(&target).map_err(|error| {
+            let error = error.to_string();
+            fail(&i18n::trf("No se pudo crear la carpeta de backup: {}", "Could not create backup folder: {}", &[&error]))
+        })?;
         let mut copied = 0;
         for name in ["config.json", "homes.json", "warps.json", "state.json"] {
             let src = dir.join(name);
@@ -211,7 +226,9 @@ impl CommandHandler for BackupCmd {
                 if fs::copy(&src, target.join(name)).is_ok() { copied += 1; }
             }
         }
-        say(&sender, &format!("Backup creado ({copied} archivos) en {}", target.display()));
+        let count = copied.to_string();
+        let path = target.display().to_string();
+        say(&sender, &i18n::trf("Backup creado ({} archivos) en {}", "Backup created ({} files) at {}", &[&count, &path]));
         Ok(1)
     }
 }
@@ -245,10 +262,10 @@ impl CommandHandler for EssentialsHelpCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let sub = greedy_arg(&args, "sub").trim().to_ascii_lowercase();
         if sub != "help" {
-            say(&sender, "Unknown subcommand. Use /essentials help.");
+            say(&sender, i18n::msg(i18n::UNKNOWN_SUBCOMMAND));
             return Ok(1);
         }
-        say(&sender, "EssentialsPumpkinX commands (149):");
+        say(&sender, i18n::tr("Comandos de EssentialsPumpkinX (149):", "EssentialsPumpkinX commands (149):"));
         for (group, commands) in HELP_GROUPS {
             let mut line = format!("{group} ({}):", commands.len());
             for command in *commands {
@@ -261,7 +278,28 @@ impl CommandHandler for EssentialsHelpCmd {
             }
             say(&sender, &line);
         }
-        say(&sender, "Use /help for the full server command tree.");
+        say(&sender, i18n::tr("Usa /help para ver el árbol completo de comandos del servidor.", "Use /help for the full server command tree."));
+        Ok(1)
+    }
+}
+
+struct EssentialsLanguageCmd;
+impl CommandHandler for EssentialsLanguageCmd {
+    fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
+        let raw = greedy_arg(&args, "value").trim().to_ascii_lowercase();
+        let lang = match raw.as_str() {
+            "en" | "en-us" | "english" => Lang::En,
+            "es" | "es-es" | "spanish" => Lang::Es,
+            _ => return Err(fail(i18n::msg(i18n::LANGUAGE_USAGE))),
+        };
+        let saved = with_state(|state| {
+            state.cfg.language = lang.as_str().to_string();
+            crate::commands::save_cfg(state)
+        })
+        .ok_or_else(unavailable)?;
+        saved.map_err(|error| fail(&error))?;
+        i18n::set(lang);
+        say(&sender, &i18n::msgf(i18n::LANGUAGE_SET, &[lang.as_str()]));
         Ok(1)
     }
 }
@@ -273,7 +311,8 @@ impl CommandHandler for ExtCmd {
         let raw = greedy_arg(&args, "args").trim().to_string();
         let target = if raw.is_empty() { me } else { crate::cmdutil::target_from_name(&sender, &server, &me, raw.trim(), CmdLevel::Two)? };
         target.as_entity().set_fire_ticks(0);
-        say(&sender, &format!("Fuego apagado de {}.", target.get_name()));
+        let name = target.get_name();
+        say(&sender, &i18n::trf("Fuego apagado de {}.", "Fire extinguished for {}.", &[&name]));
         Ok(1)
     }
 }
@@ -283,7 +322,8 @@ impl CommandHandler for AntiochCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let player = player_of(&sender)?;
         if !greedy_arg(&args, "args").trim().is_empty() {
-            _server.broadcast(&format!("{} lanza la Granada de Antioquía...", player.get_name()));
+            let name = player.get_name();
+            _server.broadcast(&i18n::trf("{} lanza la Granada de Antioquía...", "{} throws the Antioch Grenade...", &[&name]));
         }
         let (x, y, z) = player.get_position();
         let yaw = player.get_yaw().to_radians() as f64;
@@ -305,7 +345,7 @@ impl CommandHandler for SuicideCmd {
         let player = player_of(&sender)?;
         let name = player.get_name();
         player.set_health(0.0);
-        _server.broadcast(&format!("{name} se ha quitado la vida."));
+        _server.broadcast(&i18n::trf("{} se ha quitado la vida.", "{} took their own life.", &[&name]));
         Ok(1)
     }
 }
@@ -346,44 +386,44 @@ pub fn register(ctx: &Context) -> Result<(), String> {
 
     reg(
         ctx,
-        Command::new(&["afk".to_string()], "Alterna el estado AFK, opcionalmente con motivo").then(greedy_node("args").execute(AfkCmd)),
+        Command::new(&["afk".to_string()], i18n::tr("Alterna el estado AFK, opcionalmente con motivo", "Toggles AFK status, optionally with a reason")).then(greedy_node("args").execute(AfkCmd)),
         "pumpkin_essentials:afk",
     )?;
     reg(
         ctx,
-        Command::new(&["heal".to_string()], "Cúrate a ti o a otro jugador")
+        Command::new(&["heal".to_string()], i18n::tr("Cúrate a ti o a otro jugador", "Heal yourself or another player"))
             .execute(HealCmd { target: false })
             .then(word("player").execute(HealCmd { target: true })),
         "pumpkin_essentials:heal",
     )?;
     reg(
         ctx,
-        Command::new(&["feed".to_string()], "Aliméntate a ti o a otro jugador")
+        Command::new(&["feed".to_string()], i18n::tr("Aliméntate a ti o a otro jugador", "Feed yourself or another player"))
             .execute(FeedCmd { target: false })
             .then(word("player").execute(FeedCmd { target: true })),
         "pumpkin_essentials:feed",
     )?;
     reg(
         ctx,
-        Command::new(&["speed".to_string()], "Fija la velocidad de caminata 0.1-10.0").then(greedy_node("args").execute(SpeedCmd)),
+        Command::new(&["speed".to_string()], i18n::tr("Fija la velocidad de caminata 0.1-10.0", "Set walk speed 0.1-10.0")).then(greedy_node("args").execute(SpeedCmd)),
         "pumpkin_essentials:speed",
     )?;
     reg(
         ctx,
-        Command::new(&["exp".to_string()], "Muestra o fija un nivel de experiencia").then(greedy_node("args").execute(ExpCmd)),
+        Command::new(&["exp".to_string()], i18n::tr("Muestra o fija un nivel de experiencia", "Show or set an experience level")).then(greedy_node("args").execute(ExpCmd)),
         "pumpkin_essentials:exp",
     )?;
     reg(
         ctx,
-        Command::new(&["rest".to_string()], "Descansar")
+        Command::new(&["rest".to_string()], i18n::tr("Descansar", "Rest"))
             .execute(RestCmd { target: false })
             .then(word("player").execute(RestCmd { target: true })),
         "pumpkin_essentials:rest",
     )?;
-    reg(ctx, no_arg(&["backup"], "Copiar datos", BackupCmd), "pumpkin_essentials:backup")?;
-    reg(ctx, Command::new(&["essentials".to_string()], "Plugin version").execute(EssentialsCmd).then(word("sub").execute(EssentialsHelpCmd)), "pumpkin_essentials:essentials")?;
-    reg(ctx, greedy_cmd("ext", "Apagar fuego", ExtCmd), "pumpkin_essentials:ext")?;
-    reg(ctx, greedy_cmd("antioch", "Granada de Antioquía", AntiochCmd), "pumpkin_essentials:antioch")?;
-    reg(ctx, no_arg(&["suicide"], "Quitarse la vida", SuicideCmd), "pumpkin_essentials:suicide")?;
+    reg(ctx, no_arg(&["backup"], i18n::tr("Copiar datos", "Copy data"), BackupCmd), "pumpkin_essentials:backup")?;
+    reg(ctx, Command::new(&["essentials".to_string()], i18n::tr("Versión del plugin", "Plugin version")).execute(EssentialsCmd).then(word("sub").execute(EssentialsHelpCmd).then(word("value").execute(EssentialsLanguageCmd))), "pumpkin_essentials:essentials")?;
+    reg(ctx, greedy_cmd("ext", i18n::tr("Apagar fuego", "Extinguish fire"), ExtCmd), "pumpkin_essentials:ext")?;
+    reg(ctx, greedy_cmd("antioch", i18n::tr("Granada de Antioquía", "Antioch Grenade"), AntiochCmd), "pumpkin_essentials:antioch")?;
+    reg(ctx, no_arg(&["suicide"], i18n::tr("Quitarse la vida", "Take your own life"), SuicideCmd), "pumpkin_essentials:suicide")?;
     Ok(())
 }

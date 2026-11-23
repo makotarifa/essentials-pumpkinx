@@ -6,6 +6,7 @@ use crate::{
     config::TprArea,
     extras,
     host::{self, with_state},
+    i18n,
     logic::{self, TpKind},
     state::FlyState,
     store::Location,
@@ -26,9 +27,9 @@ impl CommandHandler for BackCmd {
         let key = host::key_of(&player);
         let dest = with_state(|state| state.backs.get(key).cloned())
             .ok_or_else(unavailable)?
-            .ok_or_else(|| fail("No hay una ubicación anterior a la que volver."))?;
+            .ok_or_else(|| fail(i18n::tr("No hay una ubicación anterior a la que volver.", "There is no previous location to return to.")))?;
         info!("essentials: {} /back", player.get_name());
-        super::start_teleport(&server, &player, dest, "tu ubicación anterior".into(), TpKind::Back);
+        super::start_teleport(&server, &player, dest, i18n::tr("tu ubicación anterior", "your previous location").into(), TpKind::Back);
         Ok(1)
     }
 }
@@ -52,7 +53,7 @@ impl CommandHandler for SpawnCmd {
             .ok_or_else(unavailable)?
             .unwrap_or(fallback);
         info!("essentials: {} /spawn", player.get_name());
-        super::start_teleport(&server, &player, dest, "el spawn".into(), TpKind::Spawn);
+        super::start_teleport(&server, &player, dest, i18n::tr("el spawn", "the spawn").into(), TpKind::Spawn);
         Ok(1)
     }
 }
@@ -69,7 +70,7 @@ impl CommandHandler for SetSpawnCmd {
         })
         .ok_or_else(unavailable)?
         .map_err(|error| fail(&error))?;
-        host::ok(&player, &format!("Spawn de '{}' fijado en tu posición.", loc.world));
+        host::ok(&player, &i18n::trf("Spawn de '{}' fijado en tu posición.", "Spawn of '{}' set to your position.", &[&loc.world]));
         info!("essentials: {} /setspawn in {}", player.get_name(), loc.world);
         Ok(1)
     }
@@ -89,7 +90,7 @@ impl CommandHandler for TopCmd {
         let world_name = world.get_name();
         let highest = world.get_top_block_y(x.floor() as i32, z.floor() as i32);
         if highest < 0 || highest > 319 {
-            return Err(fail("No se encontró un bloque seguro en la cima de esta columna."));
+            return Err(fail(i18n::tr("No se encontró un bloque seguro en la cima de esta columna.", "No safe block was found at the top of this column.")));
         }
         let dest = Location {
             world: world_name,
@@ -100,7 +101,7 @@ impl CommandHandler for TopCmd {
             pitch,
         };
         info!("essentials: {} /top", target.get_name());
-        super::start_teleport(&server, &target, dest, "la cima".into(), TpKind::Top);
+        super::start_teleport(&server, &target, dest, i18n::tr("la cima", "the top").into(), TpKind::Top);
         Ok(1)
     }
 }
@@ -115,9 +116,10 @@ impl CommandHandler for TpHereCmd {
         let name = plain(args.get_value("player"));
         let target = server
             .get_player_by_name(&name)
-            .ok_or_else(|| fail(&format!("Jugador '{name}' no conectado.")))?;
+            .ok_or_else(|| fail(&i18n::trf("Jugador '{}' no conectado.", "Player '{}' is not online.", &[&name])))?;
         super::start_teleport(&server, &target, host::location_of(&me), me.get_name(), TpKind::Tphere);
-        host::ok(&me, &format!("{} teletransportado a ti.", target.get_name()));
+        let target_name = target.get_name();
+        host::ok(&me, &i18n::trf("{} teletransportado a ti.", "{} teleported to you.", &[&target_name]));
         Ok(1)
     }
 }
@@ -140,7 +142,8 @@ impl CommandHandler for TpAllCmd {
             super::start_teleport(&server, &other, dest.clone(), label.clone(), TpKind::Tpall);
             count += 1;
         }
-        host::ok(&me, &format!("Petición enviada a {count} jugador(es)."));
+        let count_s = count.to_string();
+        host::ok(&me, &i18n::trf("Petición enviada a {} jugador(es).", "Request sent to {} player(s).", &[&count_s]));
         Ok(1)
     }
 }
@@ -167,7 +170,7 @@ impl CommandHandler for BottomCmd {
             yaw: player.get_yaw(),
             pitch: player.get_pitch(),
         };
-        super::start_teleport(&server, &player, dest, "el fondo".into(), TpKind::Bottom);
+        super::start_teleport(&server, &player, dest, i18n::tr("el fondo", "the bottom").into(), TpKind::Bottom);
         Ok(1)
     }
 }
@@ -179,7 +182,7 @@ impl CommandHandler for TpPosCmd {
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.len() < 3 {
-            return Err(fail("Uso: /tppos <x> <y> <z> [yaw] [pitch] [mundo]"));
+            return Err(fail(i18n::tr("Uso: /tppos <x> <y> <z> [yaw] [pitch] [mundo]", "Usage: /tppos <x> <y> <z> [yaw] [pitch] [world]")));
         }
         let (px, py, pz) = player.get_position();
         let x = extras::parse_tp_coord(tokens[0], px).map_err(|error| fail(&error))?;
@@ -200,7 +203,7 @@ impl CommandHandler for TpPosCmd {
         let world_name = tokens[idx..].join(" ");
         let world = if world_name.is_empty() { player.get_world().get_name() } else { world_name };
         if server.get_world_by_name(&world).is_none() {
-            return Err(fail(&format!("Mundo '{world}' no existe.")));
+            return Err(fail(&i18n::trf("Mundo '{}' no existe.", "World '{}' does not exist.", &[&world])));
         }
         let dest = Location { world, x, y, z, yaw, pitch };
         super::complete_teleport(&server, &player, host::key_of(&player), &dest, "tppos", TpKind::Tppos);
@@ -216,7 +219,7 @@ impl CommandHandler for TprCmd {
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         let world = if let Some(first) = tokens.first() {
             if server.has_world(first) {
-                server.get_world_by_name(first).ok_or_else(|| fail("Mundo no disponible."))?
+                server.get_world_by_name(first).ok_or_else(|| fail(i18n::tr("Mundo no disponible.", "World unavailable.")))?
             } else {
                 me.get_world()
             }
@@ -277,9 +280,9 @@ impl CommandHandler for TprCmd {
                 break;
             }
         }
-        let dest = dest.ok_or_else(|| fail("No se encontró un punto aleatorio seguro; prueba otra zona."))?;
+        let dest = dest.ok_or_else(|| fail(i18n::tr("No se encontró un punto aleatorio seguro; prueba otra zona.", "No safe random point was found; try another area.")))?;
         info!("essentials: {} /tpr -> {world_name}", target.get_name());
-        super::start_teleport(&server, &target, dest, "un punto aleatorio".into(), TpKind::Tpr);
+        super::start_teleport(&server, &target, dest, i18n::tr("un punto aleatorio", "a random point").into(), TpKind::Tpr);
         Ok(1)
     }
 }
@@ -294,7 +297,7 @@ impl CommandHandler for SetTprCmd {
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.len() < 2 {
-            return Err(fail("Uso: /settpr <mundo> center|minrange|maxrange [valor]"));
+            return Err(fail(i18n::tr("Uso: /settpr <mundo> center|minrange|maxrange [valor]", "Usage: /settpr <world> center|minrange|maxrange [value]")));
         }
         let mode = tokens[1].to_ascii_lowercase();
         let mut saved = Ok(());
@@ -311,7 +314,7 @@ impl CommandHandler for SetTprCmd {
                     .get(2)
                     .and_then(|v| v.parse::<f64>().ok())
                     .filter(|v| v.is_finite() && *v >= 0.0)
-                    .ok_or_else(|| fail("Uso: /settpr <mundo> minrange|maxrange <número>"))?;
+                    .ok_or_else(|| fail(i18n::tr("Uso: /settpr <mundo> minrange|maxrange <número>", "Usage: /settpr <world> minrange|maxrange <number>")))?;
                 with_state(|s| {
                     let entry = s.cfg.tpr.entry(tokens[0].to_string()).or_default();
                     if mode == "minrange" {
@@ -323,10 +326,10 @@ impl CommandHandler for SetTprCmd {
                 })
                 .ok_or_else(unavailable)?;
             }
-            _ => return Err(fail("Usa center, minrange o maxrange.")),
+            _ => return Err(fail(i18n::tr("Usa center, minrange o maxrange.", "Use center, minrange or maxrange."))),
         }
         saved.map_err(|error| fail(&error))?;
-        say(&sender, &format!("Zona /tpr de '{}' actualizada ({}).", tokens[0], mode));
+        say(&sender, &i18n::trf("Zona /tpr de '{}' actualizada ({}).", "/tpr area for '{}' updated ({}).", &[tokens[0], mode.as_str()]));
         Ok(1)
     }
 }
@@ -339,7 +342,7 @@ impl CommandHandler for TpoCmd {
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         match tokens.len() {
             1 => {
-                let dest = server.get_player_by_name(tokens[0]).ok_or_else(|| fail("Jugador no conectado."))?;
+                let dest = server.get_player_by_name(tokens[0]).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?;
                 let loc = host::location_of(&dest);
                 super::complete_teleport(&server, &me, host::key_of(&me), &loc, tokens[0], TpKind::Tphere);
             }
@@ -347,12 +350,12 @@ impl CommandHandler for TpoCmd {
                 if !has_level(&sender, CmdLevel::Two) {
                     return Err(CommandError::PermissionDenied);
                 }
-                let who = server.get_player_by_name(tokens[0]).ok_or_else(|| fail("Jugador de origen no conectado."))?;
-                let dest = server.get_player_by_name(tokens[1]).ok_or_else(|| fail("Jugador de destino no conectado."))?;
+                let who = server.get_player_by_name(tokens[0]).ok_or_else(|| fail(i18n::tr("Jugador de origen no conectado.", "Source player is not online.")))?;
+                let dest = server.get_player_by_name(tokens[1]).ok_or_else(|| fail(i18n::tr("Jugador de destino no conectado.", "Destination player is not online.")))?;
                 let loc = host::location_of(&dest);
                 super::complete_teleport(&server, &who, host::key_of(&who), &loc, tokens[1], TpKind::Tphere);
             }
-            _ => return Err(fail("Uso: /tpo <jugador> [a-jugador]")),
+            _ => return Err(fail(i18n::tr("Uso: /tpo <jugador> [a-jugador]", "Usage: /tpo <player> [to-player]"))),
         }
         Ok(1)
     }
@@ -364,15 +367,15 @@ impl CommandHandler for TpOfflineCmd {
         let player = player_of(&sender)?;
         let name = plain(args.get_value("player"));
         if server.get_player_by_name(&name).is_some() {
-            return Err(fail("Ese jugador está conectado; usa /tpo."));
+            return Err(fail(i18n::tr("Ese jugador está conectado; usa /tpo.", "That player is online; use /tpo.")));
         }
         let loc = with_state(|s| {
             let uuid = extras::find_uuid_by_name(&s.persisted, &name)?;
             s.persisted.last_location.get(&uuid).cloned()
         })
         .ok_or_else(unavailable)?
-        .ok_or_else(|| fail(&format!("No hay última ubicación guardada de '{name}'.")))?;
-        super::start_teleport(&server, &player, loc, format!("la última ubicación de {name}"), TpKind::Tpoffline);
+        .ok_or_else(|| fail(&i18n::trf("No hay última ubicación guardada de '{}'.", "No last saved location for '{}'.", &[&name])))?;
+        super::start_teleport(&server, &player, loc, i18n::trf("la última ubicación de {}", "{}'s last location", &[&name]), TpKind::Tpoffline);
         Ok(1)
     }
 }
@@ -386,7 +389,7 @@ impl CommandHandler for TpOHereCmd {
             super::start_teleport(&server, &target, host::location_of(&me), me.get_name(), TpKind::Tphere);
             return Ok(1);
         }
-        Err(fail("La API de Pumpkin no permite mover entidades desconectadas. Usa /tpoffline para ir a su última ubicación guardada."))
+        Err(fail(i18n::tr("La API de Pumpkin no permite mover entidades desconectadas. Usa /tpoffline para ir a su última ubicación guardada.", "The Pumpkin API cannot move disconnected entities. Use /tpoffline to go to their last saved location.")))
     }
 }
 
@@ -399,15 +402,19 @@ impl CommandHandler for WorldCmd {
             let list = server
                 .get_all_worlds()
                 .iter()
-                .map(|w| format!("{} ({})", w.get_name(), w.get_dimension()))
+                .map(|w| {
+                    let name = w.get_name();
+                    let dimension = w.get_dimension().to_string();
+                    i18n::trf("{} ({})", "{} ({})", &[&name, &dimension])
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
-            say(&sender, &format!("Mundos: {list}"));
+            say(&sender, &i18n::trf("Mundos: {}", "Worlds: {}", &[&list]));
             return Ok(1);
         }
         let world = server
             .get_world_by_name(raw.trim())
-            .ok_or_else(|| fail(&format!("Mundo '{}' no existe.", raw.trim())))?;
+            .ok_or_else(|| fail(&i18n::trf("Mundo '{}' no existe.", "World '{}' does not exist.", &[raw.trim()])))?;
         let sp = world.get_spawn_location();
         let dest = Location {
             world: world.get_name(),
@@ -417,7 +424,7 @@ impl CommandHandler for WorldCmd {
             yaw: sp.yaw,
             pitch: sp.pitch,
         };
-        let label = format!("el mundo {}", dest.world);
+        let label = i18n::trf("el mundo {}", "the world {}", &[&dest.world]);
         super::start_teleport(&server, &player, dest, label, TpKind::World);
         Ok(1)
     }
@@ -436,7 +443,7 @@ impl CommandHandler for JumpCmd {
             yaw: player.get_yaw(),
             pitch: player.get_pitch(),
         };
-        super::start_teleport(&server, &player, dest, "salto".into(), TpKind::Jump);
+        super::start_teleport(&server, &player, dest, i18n::tr("salto", "a jump").into(), TpKind::Jump);
         Ok(1)
     }
 }
@@ -468,7 +475,7 @@ impl CommandHandler for FlyCmd {
         });
         let name = target.get_name();
         let verb = if was_flying { "disabled" } else { "enabled" };
-        host::ok(&target, if was_flying { "Vuelo desactivado." } else { "Vuelo activado." });
+        host::ok(&target, i18n::tr(if was_flying { "Vuelo desactivado." } else { "Vuelo activado." }, if was_flying { "Flight disabled." } else { "Flight enabled." }));
         info!("essentials: {} flight {}", name, verb);
         Ok(1)
     }
@@ -480,14 +487,14 @@ impl CommandHandler for FlySpeedCmd {
         let me = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         let mut tokens = raw.split_whitespace();
-        let first = tokens.next().ok_or_else(|| fail("Uso: /flyspeed [jugador] <0.0-10.0>"))?;
+        let first = tokens.next().ok_or_else(|| fail(i18n::tr("Uso: /flyspeed [jugador] <0.0-10.0>", "Usage: /flyspeed [player] <0.0-10.0>")))?;
         let rest: Vec<&str> = tokens.collect();
         let (target_name, speed_raw) = if extras::parse_fly_speed(first).is_ok() {
             (None, first)
         } else if rest.len() == 1 && extras::parse_fly_speed(rest[0]).is_ok() {
             (Some(first), rest[0])
         } else {
-            return Err(fail("Uso: /flyspeed [jugador] <0.0-10.0>"));
+            return Err(fail(i18n::tr("Uso: /flyspeed [jugador] <0.0-10.0>", "Usage: /flyspeed [player] <0.0-10.0>")));
         };
         let value = extras::parse_fly_speed(speed_raw).map_err(|error| fail(&error))?;
         let target = match target_name {
@@ -504,7 +511,8 @@ impl CommandHandler for FlySpeedCmd {
             s.save_persisted();
         });
         let name = target.get_name();
-        host::ok(&target, &format!("Velocidad de vuelo fijada en {value:.2}."));
+        let speed = format!("{value:.2}");
+        host::ok(&target, &i18n::trf("Velocidad de vuelo fijada en {}.", "Flight speed set to {}.", &[&speed]));
         info!("essentials: {} flyspeed {value:.2}", name);
         Ok(1)
     }
@@ -557,63 +565,63 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         })?;
     }
 
-    reg(ctx, no_arg(&["back"], "Vuelve a tu ubicación anterior", BackCmd), "pumpkin_essentials:back")?;
-    reg(ctx, no_arg(&["spawn"], "Teletransporta al spawn", SpawnCmd), "pumpkin_essentials:spawn")?;
-    reg(ctx, no_arg(&["setspawn"], "Fija el spawn de este mundo (op)", SetSpawnCmd), "pumpkin_essentials:setspawn")?;
+    reg(ctx, no_arg(&["back"], i18n::tr("Vuelve a tu ubicación anterior", "Return to your previous location"), BackCmd), "pumpkin_essentials:back")?;
+    reg(ctx, no_arg(&["spawn"], i18n::tr("Teletransporta al spawn", "Teleport to spawn"), SpawnCmd), "pumpkin_essentials:spawn")?;
+    reg(ctx, no_arg(&["setspawn"], i18n::tr("Fija el spawn de este mundo (op)", "Set this world's spawn (op)"), SetSpawnCmd), "pumpkin_essentials:setspawn")?;
     reg(
         ctx,
-        Command::new(&["top".to_string()], "Teletransporta al bloque más alto")
+        Command::new(&["top".to_string()], i18n::tr("Teletransporta al bloque más alto", "Teleport to the highest block"))
             .execute(TopCmd { target: false })
             .then(word("player").execute(TopCmd { target: true })),
         "pumpkin_essentials:top",
     )?;
     reg(
         ctx,
-        Command::new(&["bottom".to_string()], "Ir al fondo")
+        Command::new(&["bottom".to_string()], i18n::tr("Ir al fondo", "Go to the bottom"))
             .execute(BottomCmd { target: false })
             .then(word("player").execute(BottomCmd { target: true })),
         "pumpkin_essentials:bottom",
     )?;
     reg(
         ctx,
-        Command::new(&["tppos".to_string()], "Teleport a coordenadas").then(greedy_node("args").execute(TpPosCmd)),
+        Command::new(&["tppos".to_string()], i18n::tr("Teleport a coordenadas", "Teleport to coordinates")).then(greedy_node("args").execute(TpPosCmd)),
         "pumpkin_essentials:tppos",
     )?;
     reg(
         ctx,
-        Command::new(&["tpr".to_string()], "Teleport aleatorio").then(greedy_node("args").execute(TprCmd)),
+        Command::new(&["tpr".to_string()], i18n::tr("Teleport aleatorio", "Random teleport")).then(greedy_node("args").execute(TprCmd)),
         "pumpkin_essentials:tpr",
     )?;
     reg(
         ctx,
-        Command::new(&["settpr".to_string()], "Configurar /tpr").then(greedy_node("args").execute(SetTprCmd)),
+        Command::new(&["settpr".to_string()], i18n::tr("Configurar /tpr", "Configure /tpr")).then(greedy_node("args").execute(SetTprCmd)),
         "pumpkin_essentials:settpr",
     )?;
     reg(
         ctx,
-        Command::new(&["tpo".to_string()], "Teleport instantáneo").then(greedy_node("args").execute(TpoCmd)),
+        Command::new(&["tpo".to_string()], i18n::tr("Teleport instantáneo", "Instant teleport")).then(greedy_node("args").execute(TpoCmd)),
         "pumpkin_essentials:tpo",
     )?;
-    reg(ctx, one_arg(&["tpoffline"], "Ir a la última ubicación de un desconectado", "player", TpOfflineCmd), "pumpkin_essentials:tpoffline")?;
-    reg(ctx, one_arg(&["tpohere"], "Traer a un jugador conectado", "player", TpOHereCmd), "pumpkin_essentials:tpohere")?;
-    reg(ctx, one_arg(&["tphere"], "Teletransporta a un jugador a ti (op)", "player", TpHereCmd), "pumpkin_essentials:tphere")?;
-    reg(ctx, no_arg(&["tpall"], "Teletransporta a todos a ti (op)", TpAllCmd), "pumpkin_essentials:tpall")?;
+    reg(ctx, one_arg(&["tpoffline"], i18n::tr("Ir a la última ubicación de un desconectado", "Go to a disconnected player's last location"), "player", TpOfflineCmd), "pumpkin_essentials:tpoffline")?;
+    reg(ctx, one_arg(&["tpohere"], i18n::tr("Traer a un jugador conectado", "Bring an online player to you"), "player", TpOHereCmd), "pumpkin_essentials:tpohere")?;
+    reg(ctx, one_arg(&["tphere"], i18n::tr("Teletransporta a un jugador a ti (op)", "Teleport a player to you (op)"), "player", TpHereCmd), "pumpkin_essentials:tphere")?;
+    reg(ctx, no_arg(&["tpall"], i18n::tr("Teletransporta a todos a ti (op)", "Teleport everyone to you (op)"), TpAllCmd), "pumpkin_essentials:tpall")?;
     reg(
         ctx,
-        Command::new(&["world".to_string()], "Listar mundos / ir a un mundo").then(greedy_node("args").execute(WorldCmd)),
+        Command::new(&["world".to_string()], i18n::tr("Listar mundos / ir a un mundo", "List worlds / go to a world")).then(greedy_node("args").execute(WorldCmd)),
         "pumpkin_essentials:world",
     )?;
-    reg(ctx, no_arg(&["jump"], "Saltar", JumpCmd), "pumpkin_essentials:jump")?;
+    reg(ctx, no_arg(&["jump"], i18n::tr("Saltar", "Jump"), JumpCmd), "pumpkin_essentials:jump")?;
     reg(
         ctx,
-        Command::new(&["fly".to_string()], "Alterna el vuelo (opcionalmente de otro jugador)")
+        Command::new(&["fly".to_string()], i18n::tr("Alterna el vuelo (opcionalmente de otro jugador)", "Toggle flight (optionally for another player)"))
             .execute(FlyCmd { target: false })
             .then(word("player").execute(FlyCmd { target: true })),
         "pumpkin_essentials:fly",
     )?;
     reg(
         ctx,
-        Command::new(&["flyspeed".to_string()], "Fija la velocidad de vuelo 0.0-10.0").then(greedy_node("args").execute(FlySpeedCmd)),
+        Command::new(&["flyspeed".to_string()], i18n::tr("Fija la velocidad de vuelo 0.0-10.0", "Set flight speed 0.0-10.0")).then(greedy_node("args").execute(FlySpeedCmd)),
         "pumpkin_essentials:flyspeed",
     )?;
     Ok(())

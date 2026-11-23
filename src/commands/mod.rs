@@ -20,6 +20,7 @@ mod warps;
 
 use crate::{
     host::{self, State, with_state},
+    i18n,
     logic::{self, CdKind, Warmup, TpKind},
     store::{self, Location},
 };
@@ -70,7 +71,7 @@ pub fn complete_teleport(server: &Server, player: &Player, key: u128, dest: &Loc
                 }
             });
             player.show_actionbar(TextComponent::text(""));
-            host::ok(player, &format!("Teletransportado a {label}."));
+            host::ok(player, &i18n::trf("Teletransportado a {}.", "Teleported to {}.", &[label]));
             info!("essentials: {} teleported ({kind:?}) to {label}", player.get_name());
         }
         Err(error) => host::err(player, &error),
@@ -82,7 +83,7 @@ pub(crate) fn start_teleport(server: &Server, player: &Player, dest: Location, l
     let key = host::key_of(player);
     let now = host::now_ms();
     let Some(warmup) = with_state(|state| state.cfg.warmup_secs) else {
-        host::err(player, "Estado no disponible.");
+        host::err(player, i18n::msg(i18n::UNAVAILABLE));
         return;
     };
     if warmup == 0 {
@@ -101,13 +102,14 @@ pub(crate) fn start_teleport(server: &Server, player: &Player, dest: Location, l
     };
     let replaced = with_state(|state| state.warmups.begin(key, w)).unwrap_or(false);
     if replaced {
-        host::info(player, "Teletransporte anterior cancelado.");
+        host::info(player, i18n::tr("Teletransporte anterior cancelado.", "Previous teleport cancelled."));
     }
-    host::info(player, &format!("Teletransportando a {label} en {warmup}s. No te muevas."));
+    let secs = warmup.to_string();
+    host::info(player, &i18n::trf("Teletransportando a {} en {}s. No te muevas.", "Teleporting to {} in {}s. Do not move.", &[&label, &secs]));
 }
 
 /// Persist config.json atomically after a command changes a setting.
 pub(crate) fn save_cfg(state: &State) -> Result<(), String> {
-    store::save_json(&state.dir.join("config.json"), &state.cfg).map_err(|e| format!("No se pudo guardar config.json: {e}"))
+    store::save_json(&state.dir.join("config.json"), &state.cfg).map_err(|e| i18n::trf("No se pudo guardar config.json: {}", "Could not save config.json: {}", &[&e.to_string()]))
 }
 

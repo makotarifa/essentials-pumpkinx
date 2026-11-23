@@ -1,6 +1,7 @@
 //! Pure rules: names, home limits, cooldowns, warmups, tpa requests, /back.
 //! All times are milliseconds since an arbitrary epoch supplied by the caller.
 
+use crate::i18n;
 use crate::{
     config::Config,
     store::{Location, PlayerHomes},
@@ -25,9 +26,9 @@ pub enum NameError {
 impl NameError {
     pub fn message(self) -> &'static str {
         match self {
-            Self::Empty => "Name cannot be empty.",
-            Self::TooLong => "Name is too long (max 32 characters).",
-            Self::BadChar => "Name may only contain letters, digits, '_' and '-'.",
+            Self::Empty => i18n::tr("El nombre no puede estar vacío.", "Name cannot be empty."),
+            Self::TooLong => i18n::tr("El nombre es demasiado largo (máximo 32 caracteres).", "Name is too long (max 32 characters)."),
+            Self::BadChar => i18n::tr("El nombre solo puede contener letras, dígitos, '_' y '-'.", "Name may only contain letters, digits, '_' and '-'."),
         }
     }
 }

@@ -2,6 +2,7 @@ use crate::{
     cmdutil::{fail, greedy_arg, greedy_node, has_level, no_arg, one_arg, optional_target, player_of, plain, reg, say, target_of, unavailable, word, CmdResult},
     extras::{self, NearEntry},
     host::{self, with_state},
+    i18n,
     logic,
 };
 use pumpkin_plugin_api::{
@@ -21,7 +22,8 @@ impl CommandHandler for PingCmd {
             say(&sender, &greedy_arg(&args, "msg"));
         } else {
             let ping = sender.as_player().map_or(0, |p| p.get_ping());
-            say(&sender, &format!("Pong! Latencia: {ping} ms"));
+            let ping_s = ping.to_string();
+            say(&sender, &i18n::trf("Pong! Latencia: {} ms", "Pong! Latency: {} ms", &[&ping_s]));
         }
         Ok(1)
     }
@@ -38,7 +40,9 @@ impl CommandHandler for PlaytimeCmd {
         let ms = with_state(|s| s.persisted.playtime_ms.get(&uuid).copied())
             .ok_or_else(unavailable)?
             .unwrap_or(0);
-        say(&sender, &format!("{} lleva {} de juego.", target.get_name(), extras::format_duration(ms)));
+        let pname = target.get_name();
+        let duration = extras::format_duration(ms);
+        say(&sender, &i18n::trf("{} lleva {} de juego.", "{} has {} of playtime.", &[&pname, &duration]));
         Ok(1)
     }
 }
@@ -56,7 +60,7 @@ impl CommandHandler for NearCmd {
         } else {
             let other = server
                 .get_player_by_name(tokens[0])
-                .ok_or_else(|| fail(&format!("Jugador '{}' no conectado.", tokens[0])))?;
+                .ok_or_else(|| fail(&i18n::trf("Jugador '{}' no conectado.", "Player '{}' is not online.", &[tokens[0]])))?;
             if host::key_of(&other) != host::key_of(&me) && !has_level(&sender, CmdLevel::Two) {
                 return Err(CommandError::PermissionDenied);
             }
@@ -86,9 +90,12 @@ impl CommandHandler for NearCmd {
             .map(|e| format!("{} ({:.1}m)", e.name, e.distance))
             .collect::<Vec<_>>()
             .join(", ");
+        let near = if list.is_empty() { i18n::tr("nadie", "nobody").to_string() } else { list };
+        let center_name = center.get_name();
+        let radius_s = radius.to_string();
         say(
             &sender,
-            &format!("Jugadores cerca de {} (radio {radius}): {}", center.get_name(), if list.is_empty() { "nadie".into() } else { list }),
+            &i18n::trf("Jugadores cerca de {} (radio {}): {}", "Players near {} (radius {}): {}", &[&center_name, &radius_s, &near]),
         );
         Ok(1)
     }
@@ -100,9 +107,14 @@ impl CommandHandler for SeenCmd {
         let name = plain(args.get_value("player"));
         if let Some(p) = server.get_player_by_name(&name) {
             let (x, y, z) = p.get_position();
+            let pname = p.get_name();
+            let pworld = p.get_world().get_name();
+            let xs = format!("{x:.1}");
+            let ys = format!("{y:.1}");
+            let zs = format!("{z:.1}");
             say(
                 &sender,
-                &format!("{} está conectado ahora ({}: {:.1}, {:.1}, {:.1}).", p.get_name(), p.get_world().get_name(), x, y, z),
+                &i18n::trf("{} está conectado ahora ({}: {}, {}, {}).", "{} is online now ({}: {}, {}, {}).", &[&pname, &pworld, &xs, &ys, &zs]),
             );
             return Ok(1);
         }
@@ -113,15 +125,19 @@ impl CommandHandler for SeenCmd {
             Some((uuid, ms, loc))
         })
         .ok_or_else(unavailable)?
-        .ok_or_else(|| fail(&format!("No hay datos de '{name}'.")))?;
+        .ok_or_else(|| fail(&i18n::trf("No hay datos de '{}'.", "No data for '{}'.", &[&name])))?;
         let (uuid, ms, loc) = seen;
-        let when = ms.map_or("fecha desconocida".into(), |t| {
-            format!("hace {}", extras::format_duration(host::now_ms().saturating_sub(t)))
+        let when = ms.map_or(i18n::tr("fecha desconocida", "unknown date").to_string(), |t| {
+            let ago = extras::format_duration(host::now_ms().saturating_sub(t));
+            i18n::trf("hace {}", "{} ago", &[&ago])
         });
         let place = loc.map_or(String::new(), |l| {
-            format!(" — último lugar: {} ({:.1}, {:.1}, {:.1})", l.world, l.x, l.y, l.z)
+            let lx = format!("{:.1}", l.x);
+            let ly = format!("{:.1}", l.y);
+            let lz = format!("{:.1}", l.z);
+            i18n::trf(" — último lugar: {} ({}, {}, {})", " — last location: {} ({}, {}, {})", &[&l.world, &lx, &ly, &lz])
         });
-        say(&sender, &format!("{name} ({uuid}): visto por última vez {when}{place}."));
+        say(&sender, &i18n::trf("{} ({}): visto por última vez {}{}.", "{} ({}): last seen {}{}.", &[&name, &uuid, &when, &place]));
         Ok(1)
     }
 }
@@ -130,18 +146,31 @@ struct WhoIsCmd;
 impl CommandHandler for WhoIsCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let name = plain(args.get_value("player"));
-        let p = server.get_player_by_name(&name).ok_or_else(|| fail("El jugador debe estar conectado."))?;
+        let p = server.get_player_by_name(&name).ok_or_else(|| fail(i18n::tr("El jugador debe estar conectado.", "The player must be online.")))?;
         let uuid = logic::uuid_string(host::key_of(&p));
         let (x, y, z) = p.get_position();
         let ms = with_state(|s| s.persisted.playtime_ms.get(&uuid).copied())
             .ok_or_else(unavailable)?
             .unwrap_or(0);
         let afk = with_state(|s| s.afks.is_afk(host::key_of(&p))).unwrap_or(false);
-        let msg = format!(
-            "--- {} ---\nUUID: {}\nModo: {} | Nivel op: {:?} | Ping: {} ms\nVida: {:.1} | Comida: {} | Nivel exp: {}\nMundo: {} ({:.1}, {:.1}, {:.1})\nTiempo de juego: {}\nVuelo: {} | AFK: {}",
-            p.get_name(), uuid, extras::mode_name(&p.get_gamemode()), p.get_permission_level(), p.get_ping(),
-            p.get_health(), p.get_food_level(), p.get_experience_level(),
-            p.get_world().get_name(), x, y, z, extras::format_duration(ms), p.is_flying(), afk
+        let pname = p.get_name();
+        let mode = extras::mode_name(&p.get_gamemode());
+        let op_level = format!("{:?}", p.get_permission_level());
+        let ping_s = p.get_ping().to_string();
+        let health = format!("{:.1}", p.get_health());
+        let food = p.get_food_level().to_string();
+        let exp = p.get_experience_level().to_string();
+        let world = p.get_world().get_name();
+        let xs = format!("{x:.1}");
+        let ys = format!("{y:.1}");
+        let zs = format!("{z:.1}");
+        let playtime = extras::format_duration(ms);
+        let flying = p.is_flying().to_string();
+        let afk_s = afk.to_string();
+        let msg = i18n::trf(
+            "--- {} ---\nUUID: {}\nModo: {} | Nivel op: {} | Ping: {} ms\nVida: {} | Comida: {} | Nivel exp: {}\nMundo: {} ({}, {}, {})\nTiempo de juego: {}\nVuelo: {} | AFK: {}",
+            "--- {} ---\nUUID: {}\nMode: {} | Op level: {} | Ping: {} ms\nHealth: {} | Food: {} | Exp level: {}\nWorld: {} ({}, {}, {})\nPlaytime: {}\nFlying: {} | AFK: {}",
+            &[&pname, &uuid, mode, &op_level, &ping_s, &health, &food, &exp, &world, &xs, &ys, &zs, &playtime, &flying, &afk_s],
         );
         say(&sender, &msg);
         Ok(1)
@@ -153,17 +182,23 @@ impl CommandHandler for InfoCmd {
     fn handle(&self, sender: CommandSender, server: Server, _args: ConsumedArgs) -> CmdResult {
         let sys = server.get_sys_info();
         let names: Vec<String> = server.get_all_worlds().iter().map(|w| w.get_name()).collect();
-        let mut msg = format!(
-            "Pumpkin {} — TPS {:.1} (MSPT {:.1}) — jugadores {}/{} — mundos: {}",
-            sys.pumpkin_version, server.get_tps(), server.get_mspt(),
-            server.get_player_count(), server.get_max_players(),
-            if names.is_empty() { "ninguno".into() } else { names.join(", ") }
+        let tps = format!("{:.1}", server.get_tps());
+        let mspt = format!("{:.1}", server.get_mspt());
+        let players = server.get_player_count().to_string();
+        let max_players = server.get_max_players().to_string();
+        let worlds = if names.is_empty() { i18n::tr("ninguno", "none").to_string() } else { names.join(", ") };
+        let mut msg = i18n::trf(
+            "Pumpkin {} — TPS {} (MSPT {}) — jugadores {}/{} — mundos: {}",
+            "Pumpkin {} — TPS {} (MSPT {}) — players {}/{} — worlds: {}",
+            &[&sys.pumpkin_version, &tps, &mspt, &players, &max_players, &worlds],
         );
         if let Some(os) = sys.os_name.as_ref() {
-            msg.push_str(&format!("\nSO: {os} {}", sys.os_version.as_deref().unwrap_or("")));
+            msg.push_str(&i18n::trf("\nSO: {} {}", "\nOS: {} {}", &[os, sys.os_version.as_deref().unwrap_or("")]));
         }
         if let (Some(total), Some(used)) = (sys.total_memory, sys.used_memory) {
-            msg.push_str(&format!("\nMemoria: {} / {} MB", used / 1_048_576, total / 1_048_576));
+            let used_mb = (used / 1_048_576).to_string();
+            let total_mb = (total / 1_048_576).to_string();
+            msg.push_str(&i18n::trf("\nMemoria: {} / {} MB", "\nMemory: {} / {} MB", &[&used_mb, &total_mb]));
         }
         say(&sender, &msg);
         Ok(1)
@@ -175,7 +210,8 @@ impl CommandHandler for CompassCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let p = player_of(&sender)?;
         let (dir, deg) = extras::bearing(p.get_yaw());
-        say(&sender, &format!("Rumbo: {dir} ({deg}°)"));
+        let deg_s = deg.to_string();
+        say(&sender, &i18n::trf("Rumbo: {} ({})", "Bearing: {} ({})", &[dir, &deg_s]));
         Ok(1)
     }
 }
@@ -187,11 +223,13 @@ impl CommandHandler for DepthCmd {
         let (_, y, _) = p.get_position();
         let delta = y.floor() as i32 - p.get_world().get_sea_level();
         let msg = if delta > 0 {
-            format!("{delta} bloques sobre el nivel del mar.")
+            let d = delta.to_string();
+            i18n::trf("{} bloques sobre el nivel del mar.", "{} blocks above sea level.", &[&d])
         } else if delta < 0 {
-            format!("{} bloques bajo el nivel del mar.", -delta)
+            let d = (-delta).to_string();
+            i18n::trf("{} bloques bajo el nivel del mar.", "{} blocks below sea level.", &[&d])
         } else {
-            "Estás al nivel del mar.".into()
+            i18n::tr("Estás al nivel del mar.", "You are at sea level.").to_string()
         };
         host::info(&p, &msg);
         Ok(1)
@@ -202,12 +240,20 @@ struct GcCmd;
 impl CommandHandler for GcCmd {
     fn handle(&self, sender: CommandSender, server: Server, _args: ConsumedArgs) -> CmdResult {
         let sys = server.get_sys_info();
-        let mut msg = format!(
-            "GC — CPU: {:?} | Jugadores: {}/{} | TPS: {:.1} | MSPT: {:.1}",
-            sys.cpu_count, server.get_player_count(), server.get_max_players(), server.get_tps(), server.get_mspt()
+        let cpu = format!("{:?}", sys.cpu_count);
+        let players = server.get_player_count().to_string();
+        let max_players = server.get_max_players().to_string();
+        let tps = format!("{:.1}", server.get_tps());
+        let mspt = format!("{:.1}", server.get_mspt());
+        let mut msg = i18n::trf(
+            "GC — CPU: {} | Jugadores: {}/{} | TPS: {} | MSPT: {}",
+            "GC — CPU: {} | Players: {}/{} | TPS: {} | MSPT: {}",
+            &[&cpu, &players, &max_players, &tps, &mspt],
         );
         if let (Some(total), Some(used)) = (sys.total_memory, sys.used_memory) {
-            msg.push_str(&format!("\nMemoria: {} / {} MB", used / 1_048_576, total / 1_048_576));
+            let used_mb = (used / 1_048_576).to_string();
+            let total_mb = (total / 1_048_576).to_string();
+            msg.push_str(&i18n::trf("\nMemoria: {} / {} MB", "\nMemory: {} / {} MB", &[&used_mb, &total_mb]));
         }
         for w in server.get_all_worlds() {
             msg.push_str(&format!("\n- {}: {}", w.get_name(), w.get_dimension()));
@@ -228,15 +274,22 @@ impl CommandHandler for GetPosCmd {
         let yaw = target.get_yaw();
         let pitch = target.get_pitch();
         let world = target.get_world().get_name();
-        let mut msg = format!(
-            "{} — mundo: {}, x: {x:.2}, y: {y:.2}, z: {z:.2}, yaw: {yaw:.1}, pitch: {pitch:.1}",
-            target.get_name(),
-            world
+        let pname = target.get_name();
+        let xs = format!("{x:.2}");
+        let ys = format!("{y:.2}");
+        let zs = format!("{z:.2}");
+        let yaws = format!("{yaw:.1}");
+        let pitchs = format!("{pitch:.1}");
+        let mut msg = i18n::trf(
+            "{} — mundo: {}, x: {}, y: {}, z: {}, yaw: {}, pitch: {}",
+            "{} — world: {}, x: {}, y: {}, z: {}, yaw: {}, pitch: {}",
+            &[&pname, &world, &xs, &ys, &zs, &yaws, &pitchs],
         );
         if world == me.get_world().get_name() {
             let (mx, my, mz) = me.get_position();
             let distance = ((x - mx).powi(2) + (y - my).powi(2) + (z - mz).powi(2)).sqrt();
-            msg.push_str(&format!(" — distancia: {distance:.2}"));
+            let dist_s = format!("{distance:.2}");
+            msg.push_str(&i18n::trf(" — distancia: {}", " — distance: {}", &[&dist_s]));
         }
         say(&sender, &msg);
         Ok(1)
@@ -284,28 +337,28 @@ pub fn register(ctx: &Context) -> Result<(), String> {
     );
     reg(
         ctx,
-        Command::new(&["ping".to_string()], "Pong / repetir texto")
+        Command::new(&["ping".to_string()], i18n::tr("Pong / repetir texto", "Pong / repeat text"))
             .execute(PingCmd { echo: false })
             .then(greedy_node("msg").execute(PingCmd { echo: true })),
         ping,
     )?;
     reg(
         ctx,
-        Command::new(&["playtime".to_string()], "Tiempo de juego")
+        Command::new(&["playtime".to_string()], i18n::tr("Tiempo de juego", "Playtime"))
             .execute(PlaytimeCmd { target: false })
             .then(word("player").execute(PlaytimeCmd { target: true })),
         playtime,
     )?;
-    reg(ctx, Command::new(&["near".to_string()], "Jugadores cercanos").then(greedy_node("args").execute(NearCmd)), near)?;
-    reg(ctx, no_arg(&["compass"], "Rumbo actual", CompassCmd), compass)?;
-    reg(ctx, no_arg(&["depth"], "Profundidad", DepthCmd), depth)?;
-    reg(ctx, no_arg(&["info"], "Información del servidor", InfoCmd), info)?;
-    reg(ctx, one_arg(&["seen"], "Última conexión", "player", SeenCmd), "pumpkin_essentials:seen")?;
-    reg(ctx, one_arg(&["whois"], "Información de jugador", "player", WhoIsCmd), "pumpkin_essentials:whois")?;
-    reg(ctx, no_arg(&["gc"], "Estado del servidor", GcCmd), "pumpkin_essentials:gc")?;
+    reg(ctx, Command::new(&["near".to_string()], i18n::tr("Jugadores cercanos", "Nearby players")).then(greedy_node("args").execute(NearCmd)), near)?;
+    reg(ctx, no_arg(&["compass"], i18n::tr("Rumbo actual", "Current bearing"), CompassCmd), compass)?;
+    reg(ctx, no_arg(&["depth"], i18n::tr("Profundidad", "Depth"), DepthCmd), depth)?;
+    reg(ctx, no_arg(&["info"], i18n::tr("Información del servidor", "Server information"), InfoCmd), info)?;
+    reg(ctx, one_arg(&["seen"], i18n::tr("Última conexión", "Last seen"), "player", SeenCmd), "pumpkin_essentials:seen")?;
+    reg(ctx, one_arg(&["whois"], i18n::tr("Información de jugador", "Player information"), "player", WhoIsCmd), "pumpkin_essentials:whois")?;
+    reg(ctx, no_arg(&["gc"], i18n::tr("Estado del servidor", "Server status"), GcCmd), "pumpkin_essentials:gc")?;
     reg(
         ctx,
-        Command::new(&["getpos".to_string()], "Muestra coordenadas, mundo y rotación")
+        Command::new(&["getpos".to_string()], i18n::tr("Muestra coordenadas, mundo y rotación", "Show coordinates, world and rotation"))
             .execute(GetPosCmd { target: false })
             .then(word("player").execute(GetPosCmd { target: true })),
         "pumpkin_essentials:getpos",

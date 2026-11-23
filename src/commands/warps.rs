@@ -1,6 +1,7 @@
 use crate::{
     cmdutil::{clickable_list, fail, name_arg, need_op, no_arg, one_arg, player_of, reg, say, unavailable, word, CmdResult},
     host::{self, with_state, State},
+    i18n,
     logic::TpKind,
     store::{self, Warp},
 };
@@ -19,7 +20,7 @@ fn mutate_warps<R>(state: &mut State, f: impl FnOnce(&mut store::WarpsFile) -> R
     let r = f(&mut copy);
     store::save_json(&state.warps_path(), &copy).map_err(|e| {
         tracing::error!("essentials: could not save warps.json: {e}");
-        "No se pudieron guardar los datos; el cambio NO se aplicó.".to_string()
+        i18n::tr("No se pudieron guardar los datos; el cambio NO se aplicó.", "Could not save data; the change was NOT applied.").to_string()
     })?;
     state.warps = copy;
     Ok(r)
@@ -37,7 +38,7 @@ impl CommandHandler for SetWarpCmd {
             .ok_or_else(unavailable)?
             .map_err(|e| fail(&e))?;
         info!("essentials: {} /setwarp {name}", p.get_name());
-        host::ok(&p, &format!("Warp '{name}' creado."));
+        host::ok(&p, &i18n::trf("Warp '{}' creado.", "Warp '{}' created.", &[&name]));
         Ok(1)
     }
 }
@@ -57,10 +58,10 @@ impl CommandHandler for DelWarpCmd {
         .ok_or_else(unavailable)?
         .map_err(|e| fail(&e))?;
         if !removed {
-            return Err(fail(&format!("No existe el warp '{name}'.")));
+            return Err(fail(&i18n::trf("No existe el warp '{}'.", "Warp '{}' does not exist.", &[&name])));
         }
         info!("essentials: {} /delwarp {name}", sender.get_name());
-        sender.send_message(TextComponent::text(&format!("Warp '{name}' eliminado.")));
+        sender.send_message(TextComponent::text(&i18n::trf("Warp '{}' eliminado.", "Warp '{}' deleted.", &[&name])));
         Ok(1)
     }
 }
@@ -72,9 +73,9 @@ impl CommandHandler for WarpCmd {
         let name = name_arg(&args)?;
         let dest = with_state(|s| s.warps.warps.get(&name).map(|w| w.loc.clone()))
             .ok_or_else(unavailable)?
-            .ok_or_else(|| fail(&format!("No existe el warp '{name}'.")))?;
+            .ok_or_else(|| fail(&i18n::trf("No existe el warp '{}'.", "Warp '{}' does not exist.", &[&name])))?;
         info!("essentials: {} /warp {name}", p.get_name());
-        super::start_teleport(&server, &p, dest, format!("el warp '{name}'"), TpKind::Warp);
+        super::start_teleport(&server, &p, dest, i18n::trf("el warp '{}'", "warp '{}'", &[&name]), TpKind::Warp);
         Ok(1)
     }
 }
@@ -84,7 +85,7 @@ impl CommandHandler for WarpsCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let p = player_of(&sender)?;
         let names = with_state(|s| s.warps.warps.keys().cloned().collect::<Vec<_>>()).ok_or_else(unavailable)?;
-        p.send_system_message(clickable_list("Warps:", &names, "/warp", "Ir al warp"), false);
+        p.send_system_message(clickable_list("Warps:", &names, "/warp", i18n::tr("Ir al warp", "Go to warp")), false);
         Ok(1)
     }
 }
@@ -95,11 +96,22 @@ impl CommandHandler for WarpInfoCmd {
         let name = name_arg(&args)?;
         let info = with_state(|s| s.warps.warps.get(&name).map(|w| (w.loc.clone(), w.created_by.clone())))
             .ok_or_else(unavailable)?
-            .ok_or_else(|| fail(&format!("No existe el warp '{name}'.")))?;
+            .ok_or_else(|| fail(&i18n::trf("No existe el warp '{}'.", "Warp '{}' does not exist.", &[&name])))?;
         let (loc, by) = info;
+        let (x, y, z, yaw, pitch) = (
+            format!("{:.1}", loc.x),
+            format!("{:.1}", loc.y),
+            format!("{:.1}", loc.z),
+            format!("{:.1}", loc.yaw),
+            format!("{:.1}", loc.pitch),
+        );
         say(
             &sender,
-            &format!("Warp '{name}' — creado por {by} — {} ({:.1}, {:.1}, {:.1}), yaw {:.1}, pitch {:.1}", loc.world, loc.x, loc.y, loc.z, loc.yaw, loc.pitch),
+            &i18n::trf(
+                "Warp '{}' — creado por {} — {} ({}, {}, {}), yaw {}, pitch {}",
+                "Warp '{}' — created by {} — {} ({}, {}, {}), yaw {}, pitch {}",
+                &[&name, &by, &loc.world, &x, &y, &z, &yaw, &pitch],
+            ),
         );
         Ok(1)
     }
@@ -118,16 +130,16 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         })?;
     }
     let warp = "pumpkin_essentials:warp";
-    reg(ctx, one_arg(&["setwarp"], "Crea o sobrescribe un warp (op)", "name", SetWarpCmd), "pumpkin_essentials:admin")?;
-    reg(ctx, one_arg(&["delwarp"], "Elimina un warp (op)", "name", DelWarpCmd), "pumpkin_essentials:admin")?;
+    reg(ctx, one_arg(&["setwarp"], i18n::tr("Crea o sobrescribe un warp (op)", "Create or overwrite a warp (op)"), "name", SetWarpCmd), "pumpkin_essentials:admin")?;
+    reg(ctx, one_arg(&["delwarp"], i18n::tr("Elimina un warp (op)", "Delete a warp (op)"), "name", DelWarpCmd), "pumpkin_essentials:admin")?;
     reg(
         ctx,
-        Command::new(&["warp".to_string()], "Teletransporta a un warp o los lista")
+        Command::new(&["warp".to_string()], i18n::tr("Teletransporta a un warp o los lista", "Teleport to a warp or list warps"))
             .execute(WarpsCmd)
             .then(word("name").execute(WarpCmd)),
         warp,
     )?;
-    reg(ctx, no_arg(&["warps"], "Lista los warps", WarpsCmd), warp)?;
-    reg(ctx, one_arg(&["warpinfo"], "Información de un warp", "name", WarpInfoCmd), "pumpkin_essentials:warpinfo")?;
+    reg(ctx, no_arg(&["warps"], i18n::tr("Lista los warps", "List warps"), WarpsCmd), warp)?;
+    reg(ctx, one_arg(&["warpinfo"], i18n::tr("Información de un warp", "Warp information"), "name", WarpInfoCmd), "pumpkin_essentials:warpinfo")?;
     Ok(())
 }

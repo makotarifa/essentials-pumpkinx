@@ -2,6 +2,7 @@ use crate::{
     cmdutil::{fail, forward, greedy_arg, greedy_node, has_level, no_arg, player_of, reg, say, unavailable, CmdResult},
     environment,
     host::{self, with_state},
+    i18n,
 };
 use pumpkin_plugin_api::{
     command::{CommandError, CommandSender, ConsumedArgs},
@@ -42,13 +43,13 @@ impl CommandHandler for GuiCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let player = player_of(&sender)?;
         let (screen, title) = match self.kind {
-            GuiKind::Anvil => (Screen::Anvil, "Yunque"),
-            GuiKind::Cartography => (Screen::CartographyTable, "Mesa de cartografía"),
-            GuiKind::Grindstone => (Screen::Grindstone, "Piedra de afilar"),
-            GuiKind::Loom => (Screen::Loom, "Telar"),
-            GuiKind::Smithing => (Screen::Smithing, "Mesa de herrería"),
-            GuiKind::Workbench => (Screen::Crafting, "Mesa de trabajo"),
-            GuiKind::Disposal => (Screen::Generic9x6, "Basura"),
+            GuiKind::Anvil => (Screen::Anvil, i18n::tr("Yunque", "Anvil")),
+            GuiKind::Cartography => (Screen::CartographyTable, i18n::tr("Mesa de cartografía", "Cartography table")),
+            GuiKind::Grindstone => (Screen::Grindstone, i18n::tr("Piedra de afilar", "Grindstone")),
+            GuiKind::Loom => (Screen::Loom, i18n::tr("Telar", "Loom")),
+            GuiKind::Smithing => (Screen::Smithing, i18n::tr("Mesa de herrería", "Smithing table")),
+            GuiKind::Workbench => (Screen::Crafting, i18n::tr("Mesa de trabajo", "Crafting table")),
+            GuiKind::Disposal => (Screen::Generic9x6, i18n::tr("Basura", "Trash")),
         };
         player.open_gui(Gui::new(screen, TextComponent::text(title)));
         Ok(1)
@@ -61,7 +62,7 @@ impl CommandHandler for EditSignCmd {
         let player = player_of(&sender)?;
         let pos = block_pos(forward(&player, 5.0));
         player.open_sign_editor(pos, true);
-        host::info(&player, "Editor de cartel abierto (bloque aproximado a 5 bloques).");
+        host::info(&player, i18n::tr("Editor de cartel abierto (bloque aproximado a 5 bloques).", "Sign editor opened (approximate block 5 blocks away)."));
         Ok(1)
     }
 }
@@ -70,7 +71,7 @@ struct StoneCutterCmd;
 impl CommandHandler for StoneCutterCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let player = player_of(&sender)?;
-        player.open_gui(Gui::new(Screen::Stonecutter, TextComponent::text("Cortador de piedra")));
+        player.open_gui(Gui::new(Screen::Stonecutter, TextComponent::text(i18n::tr("Cortador de piedra", "Stonecutter"))));
         Ok(1)
     }
 }
@@ -84,11 +85,11 @@ impl CommandHandler for IceCmd {
             me
         } else {
             if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-            _server.get_player_by_name(&name).ok_or_else(|| fail("Jugador no conectado."))?
+            _server.get_player_by_name(&name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?
         };
         target.set_freeze_ticks(140);
         target.as_entity().set_velocity((0.0, 0.0, 0.0));
-        host::info(&target, "Has sido congelado.");
+        host::info(&target, i18n::tr("Has sido congelado.", "You have been frozen."));
         Ok(1)
     }
 }
@@ -115,7 +116,7 @@ fn grow_tree(player: &Player, big: bool) -> CmdResult {
             }
         }
     }
-    host::ok(player, if big { "Árbol grande generado." } else { "Árbol generado." });
+    host::ok(player, if big { i18n::tr("Árbol grande generado.", "Large tree generated.") } else { i18n::tr("Árbol generado.", "Tree generated.") });
     Ok(1)
 }
 
@@ -136,10 +137,10 @@ impl CommandHandler for BreakCmd {
         let block = player.get_world().get_block(pos);
         let name = block.name.to_ascii_lowercase();
         if name.contains("bedrock") && !has_level(&sender, CmdLevel::Three) {
-            return Err(fail("No puedes romper bedrock."));
+            return Err(fail(i18n::tr("No puedes romper bedrock.", "You cannot break bedrock.")));
         }
         player.get_world().set_block_by_name(pos, "minecraft:air", update_flags());
-        host::ok(&player, "Bloque eliminado.");
+        host::ok(&player, i18n::tr("Bloque eliminado.", "Block removed."));
         Ok(1)
     }
 }
@@ -150,11 +151,12 @@ impl CommandHandler for BurnCmd {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
         let raw = greedy_arg(&args, "args");
         let mut tokens = raw.split_whitespace();
-        let name = tokens.next().ok_or_else(|| fail("Uso: /burn <jugador> <segundos>"))?;
+        let name = tokens.next().ok_or_else(|| fail(i18n::tr("Uso: /burn <jugador> <segundos>", "Usage: /burn <player> <seconds>")))?;
         let secs = tokens.next().and_then(|s| s.parse::<i32>().ok()).unwrap_or(5).clamp(0, 300);
-        let target = server.get_player_by_name(name).ok_or_else(|| fail("Jugador no conectado."))?;
+        let target = server.get_player_by_name(name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?;
         target.as_entity().set_fire_ticks(secs * 20);
-        host::ok(&target, &format!("Ardes durante {secs}s."));
+        let secs_s = secs.to_string();
+        host::ok(&target, &i18n::trf("Ardes durante {}s.", "You are burning for {}s.", &[&secs_s]));
         Ok(1)
     }
 }
@@ -166,13 +168,13 @@ impl CommandHandler for LightningCmd {
         let me = player_of(&sender)?;
         let name = greedy_arg(&args, "args").trim().to_string();
         let (pos, label) = if name.is_empty() {
-            (forward(&me, 5.0), "el objetivo".to_string())
+            (forward(&me, 5.0), i18n::tr("el objetivo", "the target").to_string())
         } else {
-            let target = server.get_player_by_name(&name).ok_or_else(|| fail("Jugador no conectado."))?;
+            let target = server.get_player_by_name(&name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?;
             (target.get_position(), target.get_name())
         };
         me.get_world().strike_lightning(pos, false);
-        host::ok(&me, &format!("Rayo caído en {label}."));
+        host::ok(&me, &i18n::trf("Rayo caído en {}.", "Lightning struck {}.", &[&label]));
         Ok(1)
     }
 }
@@ -186,12 +188,13 @@ impl CommandHandler for ThunderCmd {
         let on = match raw.as_str() {
             "on" | "true" | "1" => true,
             "off" | "false" | "0" => false,
-            _ => return Err(fail("Uso: /thunder on|off")),
+            _ => return Err(fail(i18n::tr("Uso: /thunder on|off", "Usage: /thunder on|off"))),
         };
         let world = player.get_world();
         world.set_thundering(on);
         if on { world.set_raining(true); }
-        host::ok(&player, &format!("Tormenta {}.", if on { "activada" } else { "desactivada" }));
+        let state = if on { i18n::tr("activada", "enabled") } else { i18n::tr("desactivada", "disabled") };
+        host::ok(&player, &i18n::trf("Tormenta {}.", "Storm {}.", &[state]));
         Ok(1)
     }
 }
@@ -205,7 +208,7 @@ impl CommandHandler for NukeCmd {
         let confirmed = with_state(|state| environment::take_or_set(&mut state.pending_confirm, host::key_of(&player), &label))
             .ok_or_else(unavailable)?;
         if !confirmed {
-            return Err(fail("Confirmación requerida: vuelve a ejecutar /nuke para confirmar."));
+            return Err(fail(i18n::tr("Confirmación requerida: vuelve a ejecutar /nuke para confirmar.", "Confirmation required: run /nuke again to confirm.")));
         }
         let targets: Vec<Player> = if greedy_arg(&args, "args").trim().is_empty() {
             server.get_all_players()
@@ -221,7 +224,7 @@ impl CommandHandler for NukeCmd {
                 }
             }
         }
-        host::ok(&player, "Bombardeo ejecutado.");
+        host::ok(&player, i18n::tr("Bombardeo ejecutado.", "Bombardment executed."));
         Ok(1)
     }
 }
@@ -233,12 +236,14 @@ impl CommandHandler for PlayerTimeCmd {
         let raw = greedy_arg(&args, "args").trim().to_string();
         let world = player.get_world();
         if raw.is_empty() || raw.eq_ignore_ascii_case("get") {
-            say(&sender, &format!("Hora del mundo: {} ticks.", world.get_time_of_day()));
+            let now_ticks = world.get_time_of_day().to_string();
+            say(&sender, &i18n::trf("Hora del mundo: {} ticks.", "World time: {} ticks.", &[&now_ticks]));
             return Ok(1);
         }
-        let ticks = environment::parse_time(&raw).ok_or_else(|| fail("Hora no reconocida (day/noon/night/midnight o ticks)."))?;
+        let ticks = environment::parse_time(&raw).ok_or_else(|| fail(i18n::tr("Hora no reconocida (day/noon/night/midnight o ticks).", "Unrecognized time (day/noon/night/midnight or ticks).")))?;
         world.set_time_of_day(ticks);
-        host::ok(&player, &format!("Hora del mundo ajustada a {ticks} ticks (la API no tiene hora por jugador)."));
+        let ticks_s = ticks.to_string();
+        host::ok(&player, &i18n::trf("Hora del mundo ajustada a {} ticks (la API no tiene hora por jugador).", "World time set to {} ticks (the API has no per-player time).", &[&ticks_s]));
         Ok(1)
     }
 }
@@ -249,16 +254,16 @@ impl CommandHandler for PlayerWeatherCmd {
         let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args").trim().to_string();
         if raw.is_empty() || raw.eq_ignore_ascii_case("get") {
-            let current = player.get_player_weather().map_or("por defecto".into(), |w| format!("{w:?}"));
-            say(&sender, &format!("Clima del jugador: {current}."));
+            let current = player.get_player_weather().map_or(i18n::tr("por defecto", "default").into(), |w| format!("{w:?}"));
+            say(&sender, &i18n::trf("Clima del jugador: {}.", "Player weather: {}.", &[&current]));
             return Ok(1);
         }
-        match environment::parse_weather(&raw).ok_or_else(|| fail("Clima no reconocido (clear/rain/reset)."))? {
+        match environment::parse_weather(&raw).ok_or_else(|| fail(i18n::tr("Clima no reconocido (clear/rain/reset).", "Unrecognized weather (clear/rain/reset).")))? {
             environment::WeatherKind::Clear => player.set_player_weather(PlayerWeather::Clear),
             environment::WeatherKind::Downfall => player.set_player_weather(PlayerWeather::Downfall),
             environment::WeatherKind::Reset => player.reset_player_weather(),
         }
-        host::ok(&player, "Clima personalizado actualizado.");
+        host::ok(&player, i18n::tr("Clima personalizado actualizado.", "Custom weather updated."));
         Ok(1)
     }
 }
@@ -307,24 +312,24 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         }
     }
 
-    reg(ctx, no_arg(&["anvil"], "Abrir yunque", GuiCmd { kind: GuiKind::Anvil }), "pumpkin_essentials:anvil")?;
-    reg(ctx, no_arg(&["cartographytable"], "Abrir cartografía", GuiCmd { kind: GuiKind::Cartography }), "pumpkin_essentials:cartographytable")?;
-    reg(ctx, no_arg(&["grindstone"], "Abrir piedra de afilar", GuiCmd { kind: GuiKind::Grindstone }), "pumpkin_essentials:grindstone")?;
-    reg(ctx, no_arg(&["loom"], "Abrir telar", GuiCmd { kind: GuiKind::Loom }), "pumpkin_essentials:loom")?;
-    reg(ctx, no_arg(&["smithingtable"], "Abrir herrería", GuiCmd { kind: GuiKind::Smithing }), "pumpkin_essentials:smithingtable")?;
-    reg(ctx, no_arg(&["workbench"], "Abrir mesa de trabajo", GuiCmd { kind: GuiKind::Workbench }), "pumpkin_essentials:workbench")?;
-    reg(ctx, no_arg(&["disposal"], "Abrir basura", GuiCmd { kind: GuiKind::Disposal }), "pumpkin_essentials:disposal")?;
-    reg(ctx, no_arg(&["editsign"], "Editar cartel", EditSignCmd), "pumpkin_essentials:editsign")?;
-    reg(ctx, no_arg(&["stonecutter"], "Abrir cortador de piedra", StoneCutterCmd), "pumpkin_essentials:stonecutter")?;
-    reg(ctx, Command::new(&["ice".to_string()], "Congelar").then(greedy_node("args").execute(IceCmd)), "pumpkin_essentials:ice")?;
-    reg(ctx, no_arg(&["tree"], "Generar árbol", TreeCmd { big: false }), "pumpkin_essentials:tree")?;
-    reg(ctx, no_arg(&["bigtree"], "Generar árbol grande", TreeCmd { big: true }), "pumpkin_essentials:bigtree")?;
-    reg(ctx, no_arg(&["break"], "Romper bloque", BreakCmd), "pumpkin_essentials:break")?;
-    reg(ctx, Command::new(&["burn".to_string()], "Prender fuego").then(greedy_node("args").execute(BurnCmd)), "pumpkin_essentials:burn")?;
-    reg(ctx, Command::new(&["lightning".to_string()], "Rayo").then(greedy_node("args").execute(LightningCmd)), "pumpkin_essentials:lightning")?;
-    reg(ctx, Command::new(&["thunder".to_string()], "Tormenta").then(greedy_node("args").execute(ThunderCmd)), "pumpkin_essentials:thunder")?;
-    reg(ctx, Command::new(&["nuke".to_string()], "Bombardeo").then(greedy_node("args").execute(NukeCmd)), "pumpkin_essentials:nuke")?;
-    reg(ctx, Command::new(&["ptime".to_string()], "Hora").then(greedy_node("args").execute(PlayerTimeCmd)), "pumpkin_essentials:ptime")?;
-    reg(ctx, Command::new(&["pweather".to_string()], "Clima").then(greedy_node("args").execute(PlayerWeatherCmd)), "pumpkin_essentials:pweather")?;
+    reg(ctx, no_arg(&["anvil"], i18n::tr("Abrir yunque", "Open anvil"), GuiCmd { kind: GuiKind::Anvil }), "pumpkin_essentials:anvil")?;
+    reg(ctx, no_arg(&["cartographytable"], i18n::tr("Abrir cartografía", "Open cartography table"), GuiCmd { kind: GuiKind::Cartography }), "pumpkin_essentials:cartographytable")?;
+    reg(ctx, no_arg(&["grindstone"], i18n::tr("Abrir piedra de afilar", "Open grindstone"), GuiCmd { kind: GuiKind::Grindstone }), "pumpkin_essentials:grindstone")?;
+    reg(ctx, no_arg(&["loom"], i18n::tr("Abrir telar", "Open loom"), GuiCmd { kind: GuiKind::Loom }), "pumpkin_essentials:loom")?;
+    reg(ctx, no_arg(&["smithingtable"], i18n::tr("Abrir herrería", "Open smithing table"), GuiCmd { kind: GuiKind::Smithing }), "pumpkin_essentials:smithingtable")?;
+    reg(ctx, no_arg(&["workbench"], i18n::tr("Abrir mesa de trabajo", "Open crafting table"), GuiCmd { kind: GuiKind::Workbench }), "pumpkin_essentials:workbench")?;
+    reg(ctx, no_arg(&["disposal"], i18n::tr("Abrir basura", "Open trash"), GuiCmd { kind: GuiKind::Disposal }), "pumpkin_essentials:disposal")?;
+    reg(ctx, no_arg(&["editsign"], i18n::tr("Editar cartel", "Edit sign"), EditSignCmd), "pumpkin_essentials:editsign")?;
+    reg(ctx, no_arg(&["stonecutter"], i18n::tr("Abrir cortador de piedra", "Open stonecutter"), StoneCutterCmd), "pumpkin_essentials:stonecutter")?;
+    reg(ctx, Command::new(&["ice".to_string()], i18n::tr("Congelar", "Freeze")).then(greedy_node("args").execute(IceCmd)), "pumpkin_essentials:ice")?;
+    reg(ctx, no_arg(&["tree"], i18n::tr("Generar árbol", "Generate tree"), TreeCmd { big: false }), "pumpkin_essentials:tree")?;
+    reg(ctx, no_arg(&["bigtree"], i18n::tr("Generar árbol grande", "Generate large tree"), TreeCmd { big: true }), "pumpkin_essentials:bigtree")?;
+    reg(ctx, no_arg(&["break"], i18n::tr("Romper bloque", "Break block"), BreakCmd), "pumpkin_essentials:break")?;
+    reg(ctx, Command::new(&["burn".to_string()], i18n::tr("Prender fuego", "Ignite")).then(greedy_node("args").execute(BurnCmd)), "pumpkin_essentials:burn")?;
+    reg(ctx, Command::new(&["lightning".to_string()], i18n::tr("Rayo", "Lightning")).then(greedy_node("args").execute(LightningCmd)), "pumpkin_essentials:lightning")?;
+    reg(ctx, Command::new(&["thunder".to_string()], i18n::tr("Tormenta", "Storm")).then(greedy_node("args").execute(ThunderCmd)), "pumpkin_essentials:thunder")?;
+    reg(ctx, Command::new(&["nuke".to_string()], i18n::tr("Bombardeo", "Bombardment")).then(greedy_node("args").execute(NukeCmd)), "pumpkin_essentials:nuke")?;
+    reg(ctx, Command::new(&["ptime".to_string()], i18n::tr("Hora", "Time")).then(greedy_node("args").execute(PlayerTimeCmd)), "pumpkin_essentials:ptime")?;
+    reg(ctx, Command::new(&["pweather".to_string()], i18n::tr("Clima", "Weather")).then(greedy_node("args").execute(PlayerWeatherCmd)), "pumpkin_essentials:pweather")?;
     Ok(())
 }

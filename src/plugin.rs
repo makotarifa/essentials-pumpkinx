@@ -47,6 +47,7 @@ impl Plugin for EssentialsPumpkinX {
                 config
             }
         };
+        crate::i18n::set_from_str(&cfg.language);
 
         // A corrupt data file must not be treated as empty (the next save would destroy it).
         // Legacy shapes are normalised in memory; the tick writes them back.

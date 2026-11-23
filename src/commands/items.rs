@@ -2,6 +2,7 @@ use crate::{
     cmdutil::{fail, forward, give_stack, greedy_arg, greedy_node, has_level, no_arg, player_of, plain, reg, say, unavailable, uuid_of, word, CmdResult},
     environment,
     host::{self, with_state},
+    i18n,
     kits,
 };
 use pumpkin_plugin_api::{
@@ -70,15 +71,16 @@ impl CommandHandler for ItemCmd {
         let me = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
-        if tokens.is_empty() { return Err(fail("Uso: /item <id> [cantidad] [jugador]")); }
+        if tokens.is_empty() { return Err(fail(i18n::tr("Uso: /item <id> [cantidad] [jugador]", "Usage: /item <id> [amount] [player]"))); }
         let key = kits::normalize_item_key(tokens[0]);
         let count = tokens.get(1).and_then(|s| s.parse::<u8>().ok()).filter(|n| *n > 0).unwrap_or(1).min(64);
         let target = if let Some(name) = tokens.get(2) {
             if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-            server.get_player_by_name(name).ok_or_else(|| fail("Jugador no conectado."))?
+            server.get_player_by_name(name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?
         } else { me };
         give_stack(&target, &key, count)?;
-        host::ok(&target, &format!("Recibiste {count}x{key}."));
+        let count_s = count.to_string();
+        host::ok(&target, &i18n::trf("Recibiste {}x{}.", "Received {}x{}.", &[&count_s, &key]));
         Ok(1)
     }
 }
@@ -91,9 +93,10 @@ impl CommandHandler for ItemDbCmd {
             let player = player_of(&sender)?;
             let slot = held_slot(&player);
             let key = player.get_inventory().as_inventory().get_item(slot).map(|i| i.get_registry_key()).unwrap_or_else(|| "minecraft:air".into());
-            say(&sender, &format!("Ítem en mano: {key}"));
+            say(&sender, &i18n::trf("Ítem en mano: {}", "Item in hand: {}", &[&key]));
         } else {
-            say(&sender, &format!("Clave: {}", kits::normalize_item_key(&raw)));
+            let key = kits::normalize_item_key(&raw);
+            say(&sender, &i18n::trf("Clave: {}", "Key: {}", &[&key]));
         }
         Ok(1)
     }
@@ -110,20 +113,20 @@ impl CommandHandler for ItemLoreCmd {
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = held_slot(&player);
-        let Some(item) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
+        let Some(item) = inv.get_item(slot) else { return Err(fail(i18n::tr("No tienes un ítem en la mano.", "You are not holding an item."))); };
         let mut lore = item.get_lore();
         match action.as_str() {
             "add" | "set" => {
-                if text.is_empty() { return Err(fail("Falta el texto del lore.")); }
+                if text.is_empty() { return Err(fail(i18n::tr("Falta el texto del lore.", "Missing lore text."))); }
                 if action == "set" { lore.clear(); }
                 lore.push(TextComponent::text(&text));
             }
             "clear" => lore.clear(),
-            _ => return Err(fail("Uso: /itemlore add|set|clear <texto>")),
+            _ => return Err(fail(i18n::tr("Uso: /itemlore add|set|clear <texto>", "Usage: /itemlore add|set|clear <text>"))),
         }
         item.set_lore(lore);
         inv.set_item(slot, Some(item));
-        host::ok(&player, "Lore actualizado.");
+        host::ok(&player, i18n::tr("Lore actualizado.", "Lore updated."));
         Ok(1)
     }
 }
@@ -136,14 +139,14 @@ impl CommandHandler for ItemNameCmd {
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = held_slot(&player);
-        let Some(item) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
+        let Some(item) = inv.get_item(slot) else { return Err(fail(i18n::tr("No tienes un ítem en la mano.", "You are not holding an item."))); };
         if raw.is_empty() || raw.eq_ignore_ascii_case("off") {
             item.set_custom_name(None);
         } else {
             item.set_custom_name(Some(TextComponent::text(&raw).color_named(NamedColor::Gold)));
         }
         inv.set_item(slot, Some(item));
-        host::ok(&player, "Nombre del ítem actualizado.");
+        host::ok(&player, i18n::tr("Nombre del ítem actualizado.", "Item name updated."));
         Ok(1)
     }
 }
@@ -151,7 +154,7 @@ impl CommandHandler for ItemNameCmd {
 struct RepairCmd;
 impl CommandHandler for RepairCmd {
     fn handle(&self, _sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        Err(fail("La API WIT 0.1 de Pumpkin no expone durabilidad de objetos (get_damage/set_damage), por lo que /repair no puede restaurarlos sin destruir sus datos. Limitación documentada."))
+        Err(fail(i18n::tr("La API WIT 0.1 de Pumpkin no expone durabilidad de objetos (get_damage/set_damage), por lo que /repair no puede restaurarlos sin destruir sus datos. Limitación documentada.", "Pumpkin's WIT 0.1 API does not expose item durability (get_damage/set_damage), so /repair cannot restore items without destroying their data. Documented limitation.")))
     }
 }
 
@@ -164,19 +167,22 @@ impl CommandHandler for UnlimitedCmd {
         let action = tokens.first().copied().unwrap_or("").to_ascii_lowercase();
         let target = if tokens.len() > 1 {
             if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-            server.get_player_by_name(tokens[1]).ok_or_else(|| fail("Jugador no conectado."))?
+            server.get_player_by_name(tokens[1]).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?
         } else { me };
         let uuid = uuid_of(&target);
         let (message, current) = with_state(|s| {
             let list = s.kits.unlimited.entry(uuid.clone()).or_default();
             match action.as_str() {
-                "list" => (format!("Objetos ilimitados: {}", if list.is_empty() { "ninguno".into() } else { list.join(", ") }), list.clone()),
-                "clear" => { list.clear(); ("Objetos ilimitados borrados.".into(), Vec::new()) }
-                "" => (format!("Objetos ilimitados: {}", if list.is_empty() { "ninguno".into() } else { list.join(", ") }), list.clone()),
+                "list" | "" => {
+                    let entries = if list.is_empty() { i18n::tr("(ninguno)", "(none)").to_string() } else { list.join(", ") };
+                    (i18n::trf("Objetos ilimitados: {}", "Unlimited items: {}", &[&entries]), list.clone())
+                }
+                "clear" => { list.clear(); (i18n::tr("Objetos ilimitados borrados.", "Unlimited items cleared.").to_string(), Vec::new()) }
                 _ => {
                     let key = kits::normalize_item_key(action.as_str());
                     let now_unlimited = if let Some(pos) = list.iter().position(|k| k == &key) { list.remove(pos); false } else { list.push(key.clone()); true };
-                    (format!("{key}: {}", if now_unlimited { "ilimitado" } else { "limitado" }), list.clone())
+                    let state = if now_unlimited { i18n::tr("ilimitado", "unlimited") } else { i18n::tr("limitado", "limited") };
+                    (i18n::trf("{}: {}", "{}: {}", &[&key, &state]), list.clone())
                 }
             }
         })
@@ -195,11 +201,11 @@ impl CommandHandler for HatCmd {
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = held_slot(&player);
-        let Some(held) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
+        let Some(held) = inv.get_item(slot) else { return Err(fail(i18n::tr("No tienes un ítem en la mano.", "You are not holding an item."))); };
         let old = pinv.get_helmet();
         pinv.set_helmet(Some(held));
         inv.set_item(slot, old);
-        host::ok(&player, "Sombrero colocado.");
+        host::ok(&player, i18n::tr("Sombrero colocado.", "Hat equipped."));
         Ok(1)
     }
 }
@@ -211,14 +217,15 @@ impl CommandHandler for MoreCmd {
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = held_slot(&player);
-        let Some(item) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
+        let Some(item) = inv.get_item(slot) else { return Err(fail(i18n::tr("No tienes un ítem en la mano.", "You are not holding an item."))); };
         let max = item.get_max_count();
         let extra = greedy_arg(&args, "args").trim().parse::<u8>().unwrap_or(max).max(1);
         let next = item.get_count().saturating_add(extra).min(max);
-        if next == item.get_count() { return Err(fail("El montón ya está completo.")); }
+        if next == item.get_count() { return Err(fail(i18n::tr("El montón ya está completo.", "The stack is already full."))); }
         item.set_count(next);
         inv.set_item(slot, Some(item));
-        host::ok(&player, &format!("Montón ampliado a {next}."));
+        let next_s = next.to_string();
+        host::ok(&player, &i18n::trf("Montón ampliado a {}.", "Stack expanded to {}.", &[&next_s]));
         Ok(1)
     }
 }
@@ -228,7 +235,7 @@ impl CommandHandler for BookCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let player = player_of(&sender)?;
         give_stack(&player, "minecraft:writable_book", 1)?;
-        host::ok(&player, "Libro entregado. La API no permite editar páginas ni título desde el plugin.");
+        host::ok(&player, i18n::tr("Libro entregado. La API no permite editar páginas ni título desde el plugin.", "Book given. The API does not allow editing pages or title from the plugin."));
         Ok(1)
     }
 }
@@ -239,9 +246,9 @@ impl CommandHandler for FireworkCmd {
         let player = player_of(&sender)?;
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
-        let slot = (0..inv.get_size()).find(|s| inv.get_item(*s).is_none()).ok_or_else(|| fail("Inventario lleno."))?;
+        let slot = (0..inv.get_size()).find(|s| inv.get_item(*s).is_none()).ok_or_else(|| fail(i18n::tr("Inventario lleno.", "Inventory full.")))?;
         inv.set_item(slot, Some(ItemStack::new("minecraft:firework_rocket", 1)));
-        host::ok(&player, "Cohete entregado.");
+        host::ok(&player, i18n::tr("Cohete entregado.", "Firework given."));
         Ok(1)
     }
 }
@@ -251,11 +258,11 @@ impl CommandHandler for PowerToolCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args").trim().to_string();
-        if raw.is_empty() { return Err(fail("Uso: /powertool <comando|d:> [ítem]")); }
+        if raw.is_empty() { return Err(fail(i18n::tr("Uso: /powertool <comando|d:> [ítem]", "Usage: /powertool <command|d:> [item]"))); }
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = held_slot(&player);
-        let key = inv.get_item(slot).map(|i| i.get_registry_key()).ok_or_else(|| fail("No tienes un ítem en la mano."))?;
+        let key = inv.get_item(slot).map(|i| i.get_registry_key()).ok_or_else(|| fail(i18n::tr("No tienes un ítem en la mano.", "You are not holding an item.")))?;
         let uuid = uuid_of(&player);
         with_state(|s| {
             let entry = s.kits.powertools.entry(uuid).or_default();
@@ -271,7 +278,7 @@ impl CommandHandler for PowerToolCmd {
             s.save_kits();
         })
         .ok_or_else(unavailable)?;
-        say(&sender, &format!("Powertool de {key} actualizado."));
+        say(&sender, &i18n::trf("Powertool de {} actualizado.", "Powertool for {} updated.", &[&key]));
         Ok(1)
     }
 }
@@ -281,9 +288,10 @@ impl CommandHandler for PowerToolListCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let player = player_of(&sender)?;
         let list = with_state(|state| kits::list_powertools(&state.kits, &uuid_of(&player))).ok_or_else(unavailable)?;
-        if list.is_empty() { return Err(fail("No tienes powertools.")); }
+        if list.is_empty() { return Err(fail(i18n::tr("No tienes powertools.", "You have no powertools."))); }
         for (key, commands) in list {
-            say(&sender, &format!("{key}: {}", commands.join(", ")));
+            let joined = commands.join(", ");
+            say(&sender, &i18n::trf("{}: {}", "{}: {}", &[&key, &joined]));
         }
         Ok(1)
     }
@@ -301,7 +309,8 @@ impl CommandHandler for PowerToolToggleCmd {
             next
         })
         .ok_or_else(unavailable)?;
-        say(&sender, &format!("Powertools {}.", if on { "activados" } else { "desactivados" }));
+        let state = if on { i18n::tr("activados", "enabled") } else { i18n::tr("desactivados", "disabled") };
+        say(&sender, &i18n::trf("Powertools {}.", "Powertools {}.", &[&state]));
         Ok(1)
     }
 }
@@ -329,15 +338,15 @@ impl CommandHandler for CondenseCmd {
         for (key, total) in counts {
             let mut left = total;
             while left > 0 {
-                let empty = (0..inv.get_size()).find(|s| inv.get_item(*s).is_none()).ok_or_else(|| fail("Inventario lleno al condensar."))?;
+                let empty = (0..inv.get_size()).find(|s| inv.get_item(*s).is_none()).ok_or_else(|| fail(i18n::tr("Inventario lleno al condensar.", "Inventory full while condensing.")))?;
                 let count = left.min(64) as u8;
                 inv.set_item(empty, Some(ItemStack::new(&key, count)));
                 left -= u32::from(count);
                 changed = true;
             }
         }
-        if !changed { return Err(fail("No había objetos para condensar.")); }
-        host::ok(&player, "Inventario condensado.");
+        if !changed { return Err(fail(i18n::tr("No había objetos para condensar.", "There were no items to condense."))); }
+        host::ok(&player, i18n::tr("Inventario condensado.", "Inventory condensed."));
         Ok(1)
     }
 }
@@ -371,9 +380,10 @@ impl CommandHandler for InvSeeCmd {
         let name = plain(args.get_value("player"));
         let target = server
             .get_player_by_name(&name)
-            .ok_or_else(|| fail(&format!("Jugador '{name}' no conectado.")))?;
+            .ok_or_else(|| fail(&i18n::trf("Jugador '{}' no conectado.", "Player '{}' is not online.", &[&name])))?;
         let inv = target.get_inventory().as_inventory();
-        view_inventory(&me, format!("Inventario de {}", target.get_name()), &inv, 36).map_err(|error| fail(&error))?;
+        let owner = target.get_name().to_string();
+        view_inventory(&me, i18n::trf("Inventario de {}", "{}'s inventory", &[&owner]), &inv, 36).map_err(|error| fail(&error))?;
         Ok(1)
     }
 }
@@ -390,7 +400,8 @@ impl CommandHandler for EnderChestCmd {
             return Ok(1);
         }
         let inv = target.get_ender_chest();
-        view_inventory(&me, format!("Ender chest de {}", target.get_name()), &inv, 27).map_err(|error| fail(&error))?;
+        let owner = target.get_name().to_string();
+        view_inventory(&me, i18n::trf("Ender chest de {}", "{}'s Ender Chest", &[&owner]), &inv, 27).map_err(|error| fail(&error))?;
         Ok(1)
     }
 }
@@ -406,7 +417,7 @@ impl CommandHandler for ClearInventoryCmd {
             me
         } else {
             if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-            server.get_player_by_name(&name).ok_or_else(|| fail("Jugador no conectado."))?
+            server.get_player_by_name(&name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?
         };
         let label = format!("clear:{}", uuid_of(&target));
         let (needed, confirmed) = with_state(|s| {
@@ -416,10 +427,10 @@ impl CommandHandler for ClearInventoryCmd {
         })
         .ok_or_else(unavailable)?;
         if needed && !confirmed {
-            return Err(fail("Confirma con /clearinventory otra vez (o usa /clearinventoryconfirmtoggle)."));
+            return Err(fail(i18n::tr("Confirma con /clearinventory otra vez (o usa /clearinventoryconfirmtoggle).", "Confirm with /clearinventory again (or use /clearinventoryconfirmtoggle).")));
         }
         target.get_inventory().clear_all();
-        host::ok(&target, "Inventario vaciado.");
+        host::ok(&target, i18n::tr("Inventario vaciado.", "Inventory cleared."));
         Ok(1)
     }
 }
@@ -434,7 +445,7 @@ impl CommandHandler for ClearConfirmToggleCmd {
             off
         })
         .ok_or_else(unavailable)?;
-        host::ok(&player, if off { "Confirmación desactivada." } else { "Confirmación activada." });
+        host::ok(&player, if off { i18n::tr("Confirmación desactivada.", "Confirmation disabled.") } else { i18n::tr("Confirmación activada.", "Confirmation enabled.") });
         Ok(1)
     }
 }
@@ -446,7 +457,7 @@ impl CommandHandler for RemoveCmd {
         let player = player_of(&sender)?;
         let filter = greedy_arg(&args, "args").trim().to_string();
         let wanted = if filter.is_empty() { None } else { parse_entity(&filter) };
-        if !filter.is_empty() && wanted.is_none() { return Err(fail("Tipo de entidad no reconocido.")); }
+        if !filter.is_empty() && wanted.is_none() { return Err(fail(i18n::tr("Tipo de entidad no reconocido.", "Unrecognized entity type."))); }
         let world = player.get_world();
         let entities = world.get_entities();
         let player_ids: Vec<u32> = server.get_players_in_world(world).iter().map(|pl| pl.as_entity().get_id()).collect();
@@ -457,7 +468,8 @@ impl CommandHandler for RemoveCmd {
             entity.remove();
             removed += 1;
         }
-        say(&sender, &format!("Eliminadas {removed} entidades."));
+        let removed_s = removed.to_string();
+        say(&sender, &i18n::trf("Eliminadas {} entidades.", "Removed {} entities.", &[&removed_s]));
         Ok(1)
     }
 }
@@ -469,16 +481,17 @@ impl CommandHandler for SpawnMobCmd {
         let me = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
-        let kind = parse_entity(tokens.first().copied().unwrap_or("")).ok_or_else(|| fail("Mob no reconocido."))?;
+        let kind = parse_entity(tokens.first().copied().unwrap_or("")).ok_or_else(|| fail(i18n::tr("Mob no reconocido.", "Unrecognized mob.")))?;
         let count = tokens.get(1).and_then(|s| s.parse::<u32>().ok()).unwrap_or(1).min(50);
         let target = if let Some(name) = tokens.get(2) {
-            server.get_player_by_name(name).ok_or_else(|| fail("Jugador no conectado."))?
+            server.get_player_by_name(name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?
         } else { me };
         let (x, y, z) = target.get_position();
         for i in 0..count {
             target.get_world().spawn_entity(kind, (x + f64::from(i % 5), y + 1.0, z + f64::from(i / 5)));
         }
-        say(&sender, &format!("Generadas {count} entidades."));
+        let count_s = count.to_string();
+        say(&sender, &i18n::trf("Generadas {} entidades.", "Spawned {} entities.", &[&count_s]));
         Ok(1)
     }
 }
@@ -489,12 +502,12 @@ impl CommandHandler for SpawnerCmd {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
         let player = player_of(&sender)?;
         let kind = greedy_arg(&args, "args").trim().to_string();
-        if parse_entity(&kind).is_none() { return Err(fail("Mob no reconocido.")); }
+        if parse_entity(&kind).is_none() { return Err(fail(i18n::tr("Mob no reconocido.", "Unrecognized mob."))); }
         let (x, y, z) = forward(&player, 3.0);
         let pos = BlockPos { x: x.floor() as i32, y: y.floor() as i32, z: z.floor() as i32 };
         let ok = player.get_world().set_block_by_name(pos, "minecraft:spawner", BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::NOTIFY_LISTENERS);
-        if !ok { return Err(fail("No se pudo colocar el spawner.")); }
-        host::ok(&player, "Spawner colocado (el tipo de mob no se puede guardar con la API WIT 0.1).");
+        if !ok { return Err(fail(i18n::tr("No se pudo colocar el spawner.", "Could not place the spawner."))); }
+        host::ok(&player, i18n::tr("Spawner colocado (el tipo de mob no se puede guardar con la API WIT 0.1).", "Spawner placed (the mob type cannot be saved with the WIT 0.1 API)."));
         Ok(1)
     }
 }
@@ -505,14 +518,14 @@ impl CommandHandler for SkullCmd {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
         let player = player_of(&sender)?;
         let name = greedy_arg(&args, "args").trim().to_string();
-        if name.is_empty() { return Err(fail("Uso: /skull <nombre>")); }
+        if name.is_empty() { return Err(fail(i18n::tr("Uso: /skull <nombre>", "Usage: /skull <name>"))); }
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = inv.get_size().saturating_sub(1);
         let item = ItemStack::new("minecraft:player_head", 1);
         item.set_custom_name(Some(TextComponent::text(&name)));
         inv.set_item(slot, Some(item));
-        host::ok(&player, &format!("Cabeza de {name} entregada (sin textura de perfil)."));
+        host::ok(&player, &i18n::trf("Cabeza de {} entregada (sin textura de perfil).", "Head of {} given (no profile texture).", &[&name]));
         Ok(1)
     }
 }
@@ -551,7 +564,7 @@ impl CommandHandler for FunSpawnCmd {
             }
         }
         let _ = server;
-        say(&sender, "Entidades lanzadas.");
+        say(&sender, i18n::tr("Entidades lanzadas.", "Entities launched."));
         Ok(1)
     }
 }
@@ -562,14 +575,14 @@ impl CommandHandler for PotionCmd {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
         let player = player_of(&sender)?;
         let effect = greedy_arg(&args, "args").trim().to_string();
-        if effect.is_empty() { return Err(fail("Uso: /potion <efecto>")); }
+        if effect.is_empty() { return Err(fail(i18n::tr("Uso: /potion <efecto>", "Usage: /potion <effect>"))); }
         let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = inv.get_size().saturating_sub(1);
         let item = ItemStack::new("minecraft:potion", 1);
-        item.set_custom_name(Some(TextComponent::text(&format!("Poción: {effect}")).color_named(NamedColor::DarkPurple)));
+        item.set_custom_name(Some(TextComponent::text(&i18n::trf("Poción: {}", "Potion: {}", &[&effect])).color_named(NamedColor::DarkPurple)));
         inv.set_item(slot, Some(item));
-        host::ok(&player, "Poción entregada como objeto con nombre; la API no permite fijar efectos NBT.");
+        host::ok(&player, i18n::tr("Poción entregada como objeto con nombre; la API no permite fijar efectos NBT.", "Potion given as a named item; the API does not allow setting NBT effects."));
         Ok(1)
     }
 }
@@ -626,44 +639,44 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         })?;
     }
 
-    reg(ctx, Command::new(&["item".to_string()], "Crear objeto").then(greedy_node("args").execute(ItemCmd)), "pumpkin_essentials:item")?;
-    reg(ctx, Command::new(&["itemdb".to_string()], "Clave de objeto").then(greedy_node("args").execute(ItemDbCmd)), "pumpkin_essentials:itemdb")?;
-    reg(ctx, Command::new(&["itemlore".to_string()], "Editar lore").then(greedy_node("args").execute(ItemLoreCmd)), "pumpkin_essentials:itemlore")?;
-    reg(ctx, Command::new(&["itemname".to_string()], "Renombrar objeto").then(greedy_node("args").execute(ItemNameCmd)), "pumpkin_essentials:itemname")?;
-    reg(ctx, Command::new(&["repair".to_string()], "Reparar").execute(RepairCmd), "pumpkin_essentials:repair")?;
-    reg(ctx, Command::new(&["unlimited".to_string()], "Objetos ilimitados").then(greedy_node("args").execute(UnlimitedCmd)), "pumpkin_essentials:unlimited")?;
-    reg(ctx, no_arg(&["hat"], "Poner ítem en la cabeza", HatCmd), "pumpkin_essentials:hat")?;
-    reg(ctx, Command::new(&["more".to_string()], "Ampliar montón").then(greedy_node("args").execute(MoreCmd)), "pumpkin_essentials:more")?;
-    reg(ctx, no_arg(&["book"], "Entregar libro", BookCmd), "pumpkin_essentials:book")?;
-    reg(ctx, no_arg(&["firework"], "Entregar cohete", FireworkCmd), "pumpkin_essentials:firework")?;
-    reg(ctx, Command::new(&["powertool".to_string()], "Asignar comando a ítem").then(greedy_node("args").execute(PowerToolCmd)), "pumpkin_essentials:powertool")?;
-    reg(ctx, no_arg(&["powertoollist"], "Listar powertools", PowerToolListCmd), "pumpkin_essentials:powertoollist")?;
-    reg(ctx, no_arg(&["powertooltoggle"], "Activar powertools", PowerToolToggleCmd), "pumpkin_essentials:powertooltoggle")?;
-    reg(ctx, Command::new(&["condense".to_string()], "Condensar inventario").then(greedy_node("args").execute(CondenseCmd)), "pumpkin_essentials:condense")?;
-    reg(ctx, Command::new(&["remove".to_string()], "Eliminar entidades").then(greedy_node("args").execute(RemoveCmd)), "pumpkin_essentials:remove")?;
-    reg(ctx, Command::new(&["spawnmob".to_string()], "Generar mob").then(greedy_node("args").execute(SpawnMobCmd)), "pumpkin_essentials:spawnmob")?;
-    reg(ctx, Command::new(&["spawner".to_string()], "Colocar spawner").then(greedy_node("args").execute(SpawnerCmd)), "pumpkin_essentials:spawner")?;
-    reg(ctx, Command::new(&["skull".to_string()], "Cabeza de jugador").then(greedy_node("args").execute(SkullCmd)), "pumpkin_essentials:skull")?;
-    reg(ctx, Command::new(&["kittycannon".to_string()], "Lanzar gatos").execute(FunSpawnCmd { kind: FunKind::Kitty }), "pumpkin_essentials:kittycannon")?;
-    reg(ctx, Command::new(&["beezooka".to_string()], "Lanzar abeja").execute(FunSpawnCmd { kind: FunKind::Bee }), "pumpkin_essentials:beezooka")?;
-    reg(ctx, Command::new(&["fireball".to_string()], "Lanzar proyectil").then(greedy_node("args").execute(FunSpawnCmd { kind: FunKind::Fireball })), "pumpkin_essentials:fireball")?;
-    reg(ctx, Command::new(&["potion".to_string()], "Entregar poción").then(greedy_node("args").execute(PotionCmd)), "pumpkin_essentials:potion")?;
-    reg(ctx, Command::new(&["invsee".to_string()], "Ver el inventario de un jugador (op)").then(word("player").execute(InvSeeCmd)), "pumpkin_essentials:invsee")?;
+    reg(ctx, Command::new(&["item".to_string()], i18n::tr("Crear objeto", "Create item")).then(greedy_node("args").execute(ItemCmd)), "pumpkin_essentials:item")?;
+    reg(ctx, Command::new(&["itemdb".to_string()], i18n::tr("Clave de objeto", "Item key")).then(greedy_node("args").execute(ItemDbCmd)), "pumpkin_essentials:itemdb")?;
+    reg(ctx, Command::new(&["itemlore".to_string()], i18n::tr("Editar lore", "Edit lore")).then(greedy_node("args").execute(ItemLoreCmd)), "pumpkin_essentials:itemlore")?;
+    reg(ctx, Command::new(&["itemname".to_string()], i18n::tr("Renombrar objeto", "Rename item")).then(greedy_node("args").execute(ItemNameCmd)), "pumpkin_essentials:itemname")?;
+    reg(ctx, Command::new(&["repair".to_string()], i18n::tr("Reparar", "Repair")).execute(RepairCmd), "pumpkin_essentials:repair")?;
+    reg(ctx, Command::new(&["unlimited".to_string()], i18n::tr("Objetos ilimitados", "Unlimited items")).then(greedy_node("args").execute(UnlimitedCmd)), "pumpkin_essentials:unlimited")?;
+    reg(ctx, no_arg(&["hat"], i18n::tr("Poner ítem en la cabeza", "Put item on head"), HatCmd), "pumpkin_essentials:hat")?;
+    reg(ctx, Command::new(&["more".to_string()], i18n::tr("Ampliar montón", "Expand stack")).then(greedy_node("args").execute(MoreCmd)), "pumpkin_essentials:more")?;
+    reg(ctx, no_arg(&["book"], i18n::tr("Entregar libro", "Give book"), BookCmd), "pumpkin_essentials:book")?;
+    reg(ctx, no_arg(&["firework"], i18n::tr("Entregar cohete", "Give firework"), FireworkCmd), "pumpkin_essentials:firework")?;
+    reg(ctx, Command::new(&["powertool".to_string()], i18n::tr("Asignar comando a ítem", "Assign command to item")).then(greedy_node("args").execute(PowerToolCmd)), "pumpkin_essentials:powertool")?;
+    reg(ctx, no_arg(&["powertoollist"], i18n::tr("Listar powertools", "List powertools"), PowerToolListCmd), "pumpkin_essentials:powertoollist")?;
+    reg(ctx, no_arg(&["powertooltoggle"], i18n::tr("Activar powertools", "Enable powertools"), PowerToolToggleCmd), "pumpkin_essentials:powertooltoggle")?;
+    reg(ctx, Command::new(&["condense".to_string()], i18n::tr("Condensar inventario", "Condense inventory")).then(greedy_node("args").execute(CondenseCmd)), "pumpkin_essentials:condense")?;
+    reg(ctx, Command::new(&["remove".to_string()], i18n::tr("Eliminar entidades", "Remove entities")).then(greedy_node("args").execute(RemoveCmd)), "pumpkin_essentials:remove")?;
+    reg(ctx, Command::new(&["spawnmob".to_string()], i18n::tr("Generar mob", "Spawn mob")).then(greedy_node("args").execute(SpawnMobCmd)), "pumpkin_essentials:spawnmob")?;
+    reg(ctx, Command::new(&["spawner".to_string()], i18n::tr("Colocar spawner", "Place spawner")).then(greedy_node("args").execute(SpawnerCmd)), "pumpkin_essentials:spawner")?;
+    reg(ctx, Command::new(&["skull".to_string()], i18n::tr("Cabeza de jugador", "Player head")).then(greedy_node("args").execute(SkullCmd)), "pumpkin_essentials:skull")?;
+    reg(ctx, Command::new(&["kittycannon".to_string()], i18n::tr("Lanzar gatos", "Launch cats")).execute(FunSpawnCmd { kind: FunKind::Kitty }), "pumpkin_essentials:kittycannon")?;
+    reg(ctx, Command::new(&["beezooka".to_string()], i18n::tr("Lanzar abeja", "Launch bee")).execute(FunSpawnCmd { kind: FunKind::Bee }), "pumpkin_essentials:beezooka")?;
+    reg(ctx, Command::new(&["fireball".to_string()], i18n::tr("Lanzar proyectil", "Launch projectile")).then(greedy_node("args").execute(FunSpawnCmd { kind: FunKind::Fireball })), "pumpkin_essentials:fireball")?;
+    reg(ctx, Command::new(&["potion".to_string()], i18n::tr("Entregar poción", "Give potion")).then(greedy_node("args").execute(PotionCmd)), "pumpkin_essentials:potion")?;
+    reg(ctx, Command::new(&["invsee".to_string()], i18n::tr("Ver el inventario de un jugador (op)", "View a player's inventory (op)")).then(word("player").execute(InvSeeCmd)), "pumpkin_essentials:invsee")?;
     reg(
         ctx,
-        Command::new(&["enderchest".to_string()], "Abre tu ender chest o ve el de otro jugador")
+        Command::new(&["enderchest".to_string()], i18n::tr("Abre tu ender chest o ve el de otro jugador", "Open your Ender Chest or view another player's"))
             .execute(EnderChestCmd { target: false })
             .then(word("player").execute(EnderChestCmd { target: true })),
         "pumpkin_essentials:enderchest",
     )?;
     reg(
         ctx,
-        Command::new(&["clearinventory".to_string()], "Vaciar inventario").then(greedy_node("args").execute(ClearInventoryCmd)),
+        Command::new(&["clearinventory".to_string()], i18n::tr("Vaciar inventario", "Clear inventory")).then(greedy_node("args").execute(ClearInventoryCmd)),
         "pumpkin_essentials:clearinventory",
     )?;
     reg(
         ctx,
-        no_arg(&["clearinventoryconfirmtoggle"], "Confirmación de inventario", ClearConfirmToggleCmd),
+        no_arg(&["clearinventoryconfirmtoggle"], i18n::tr("Confirmación de inventario", "Inventory confirmation"), ClearConfirmToggleCmd),
         "pumpkin_essentials:clearinventoryconfirmtoggle",
     )?;
     Ok(())

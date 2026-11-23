@@ -81,6 +81,7 @@ Keeps the five original keys and adds new options with default values:
 | `default_max_homes` | `3` | Per-player home limit |
 | `ops_bypass_home_limit` | `false` | Ops ignore the limit |
 | `warmup_secs` | `3` | Wait before teleporting (0 = instant) |
+| `language` | `"en"` | User-facing language: `"en"` or `"es"` |
 | `cooldown_secs` | `30` | Cooldown for `/home` and `/tpa` |
 | `tpa_expire_secs` | `60` | Request expiry |
 | `flyspeed_unit` | `0.05` | Engine speed per 1 unit of `/flyspeed` |
@@ -92,6 +93,8 @@ Keeps the five original keys and adds new options with default values:
 | `spawns` | `{}` | Per-world spawns saved by `/setspawn` |
 
 An older `config.json` remains valid.
+
+Change it at runtime with `/essentials language <en|es>`; the command updates `config.json`. Static texts live in `src/i18n.rs`; internal logs stay in English.
 
 ## Commands
 

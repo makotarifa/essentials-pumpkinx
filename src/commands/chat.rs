@@ -5,6 +5,7 @@ use crate::{
     },
     events,
     host::{self, with_state},
+    i18n,
     logic,
     state::MailMessage,
 };
@@ -28,21 +29,21 @@ impl CommandHandler for BroadcastWorldCmd {
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.is_empty() {
-            return Err(fail("Uso: /broadcastworld [mundo] <mensaje>"));
+            return Err(fail(i18n::tr("Uso: /broadcastworld [mundo] <mensaje>", "Usage: /broadcastworld [world] <message>")));
         }
         let player = sender.as_player();
         let (world_name, body) = if tokens.len() > 1 && server.has_world(tokens[0]) {
             (tokens[0].to_string(), tokens[1..].join(" "))
         } else {
-            let Some(player) = player else { return Err(fail("Indica el mundo: /broadcastworld <mundo> <mensaje>")); };
+            let Some(player) = player else { return Err(fail(i18n::tr("Indica el mundo: /broadcastworld <mundo> <mensaje>", "Specify the world: /broadcastworld <world> <message>"))); };
             (player.get_world().get_name(), tokens.join(" "))
         };
         let Some(world) = server.get_world_by_name(&world_name) else {
-            return Err(fail(&format!("Mundo '{world_name}' no existe.")));
+            return Err(fail(&i18n::trf("Mundo '{}' no existe.", "World '{}' does not exist.", &[&world_name])));
         };
         let from = sender.get_name();
         for player in server.get_players_in_world(world) {
-            player.send_system_message(TextComponent::text(&format!("[Mundo {world_name}] <{from}> {body}")), false);
+            player.send_system_message(TextComponent::text(&i18n::trf("[Mundo {}] <{}> {}", "[World {}] <{}> {}", &[&world_name, &from, &body])), false);
         }
         Ok(1)
     }
@@ -68,7 +69,8 @@ impl CommandHandler for MsgToggleCmd {
             next
         })
         .ok_or_else(unavailable)?;
-        say(&sender, &format!("Mensajes privados para {label}: {}.", if now_off { "desactivados" } else { "activados" }));
+        let mode = if now_off { i18n::tr("desactivados", "off") } else { i18n::tr("activados", "on") };
+        say(&sender, &i18n::trf("Mensajes privados para {}: {}.", "Private messages for {}: {}.", &[&label, mode]));
         Ok(1)
     }
 }
@@ -83,7 +85,7 @@ impl CommandHandler for SocialSpyCmd {
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         let (uuid, label, mode_token) = if tokens.len() > 1 {
-            let other = server.get_player_by_name(tokens[0]).ok_or_else(|| fail("Jugador no conectado."))?;
+            let other = server.get_player_by_name(tokens[0]).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?;
             (logic::uuid_string(host::key_of(&other)), other.get_name(), tokens.get(1).copied())
         } else {
             (logic::uuid_string(host::key_of(&me)), me.get_name(), tokens.first().copied())
@@ -96,7 +98,8 @@ impl CommandHandler for SocialSpyCmd {
             next
         })
         .ok_or_else(unavailable)?;
-        say(&sender, &format!("SocialSpy de {label}: {}.", if on { "activado" } else { "desactivado" }));
+        let mode = if on { i18n::tr("activado", "on") } else { i18n::tr("desactivado", "off") };
+        say(&sender, &i18n::trf("SocialSpy de {}: {}.", "SocialSpy for {}: {}.", &[&label, mode]));
         Ok(1)
     }
 }
@@ -113,12 +116,13 @@ impl CommandHandler for IgnoreCmd {
                 ids.iter().map(|id| s.persisted.names.get(id).cloned().unwrap_or_else(|| id.clone())).collect::<Vec<_>>()
             })
             .ok_or_else(unavailable)?;
-            say(&sender, &format!("Ignorados: {}", if list.is_empty() { "nadie".into() } else { list.join(", ") }));
+            let names = if list.is_empty() { i18n::tr("nadie", "nobody").to_string() } else { list.join(", ") };
+            say(&sender, &i18n::trf("Ignorados: {}", "Ignored: {}", &[&names]));
             return Ok(1);
         }
-        let target_uuid = uuid_by_name(&server, &name).ok_or_else(|| fail("Jugador desconocido."))?;
+        let target_uuid = uuid_by_name(&server, &name).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_UNKNOWN)))?;
         if target_uuid == uuid {
-            return Err(fail("No puedes ignorarte a ti mismo."));
+            return Err(fail(i18n::tr("No puedes ignorarte a ti mismo.", "You cannot ignore yourself.")));
         }
         let now_ignored = with_state(|s| {
             let list = s.persisted.ignored.entry(uuid.clone()).or_default();
@@ -132,7 +136,8 @@ impl CommandHandler for IgnoreCmd {
         })
         .ok_or_else(unavailable)?;
         with_state(|state| state.save_persisted());
-        say(&sender, &format!("{name} {}.", if now_ignored { "ignorado" } else { "dejado de ignorar" }));
+        let action = if now_ignored { i18n::tr("ignorado", "ignored") } else { i18n::tr("dejado de ignorar", "no longer ignored") };
+        say(&sender, &i18n::trf("{} {}.", "{} {}.", &[&name, action]));
         Ok(1)
     }
 }
@@ -144,7 +149,7 @@ impl CommandHandler for NickCmd {
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.is_empty() {
-            return Err(fail("Uso: /nick [jugador] <nick|off>"));
+            return Err(fail(i18n::tr("Uso: /nick [jugador] <nick|off>", "Usage: /nick [player] <nick|off>")));
         }
         let (target, nick_raw) = if tokens.len() > 1 {
             (target_from_name(&sender, &server, &me, tokens[0], CmdLevel::Two)?, tokens[1..].join(" "))
@@ -165,7 +170,9 @@ impl CommandHandler for NickCmd {
         .ok_or_else(unavailable)?;
         let afk = with_state(|state| state.afks.is_afk(host::key_of(&target))).unwrap_or(false);
         events::apply_display_name(&target, nick.as_deref(), afk);
-        say(&sender, &format!("Apodo de {}: {}.", target.get_name(), if clearing { "eliminado".into() } else { nick_raw }));
+        let nick_label = if clearing { i18n::tr("eliminado", "removed").to_string() } else { nick_raw };
+        let target_name = target.get_name();
+        say(&sender, &i18n::trf("Apodo de {}: {}.", "Nickname for {}: {}.", &[&target_name, &nick_label]));
         Ok(1)
     }
 }
@@ -175,7 +182,7 @@ impl CommandHandler for RealNameCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let lookup = greedy_arg(&args, "args").trim().to_ascii_lowercase();
         if lookup.is_empty() {
-            return Err(fail("Uso: /realname <apodo>"));
+            return Err(fail(i18n::tr("Uso: /realname <apodo>", "Usage: /realname <nickname>")));
         }
         let found = with_state(|s| {
             s.persisted.nicks.iter().find(|(_, nick)| nick.to_ascii_lowercase() == lookup).and_then(|(uuid, nick)| {
@@ -183,8 +190,8 @@ impl CommandHandler for RealNameCmd {
             })
         })
         .ok_or_else(unavailable)?
-        .ok_or_else(|| fail("No se encontró ese apodo."))?;
-        say(&sender, &format!("{} es {} en realidad.", found.0, found.1));
+        .ok_or_else(|| fail(i18n::tr("No se encontró ese apodo.", "That nickname was not found.")))?;
+        say(&sender, &i18n::trf("{} es {} en realidad.", "{} is {} in reality.", &[&found.0, &found.1]));
         Ok(1)
     }
 }
@@ -200,10 +207,10 @@ impl CommandHandler for MailCmd {
             None | Some("read") => {
                 let mails = with_state(|state| state.persisted.mail.get(&uuid).cloned()).ok_or_else(unavailable)?.unwrap_or_default();
                 if mails.is_empty() {
-                    return Err(fail("No tienes correos."));
+                    return Err(fail(i18n::tr("No tienes correos.", "You have no mail.")));
                 }
                 for m in &mails {
-                    say(&sender, &format!("[Correo de {}] {}", m.from, m.body));
+                    say(&sender, &i18n::trf("[Correo de {}] {}", "[Mail from {}] {}", &[&m.from, &m.body]));
                 }
                 with_state(|s| {
                     if let Some(list) = s.persisted.mail.get_mut(&uuid) {
@@ -214,13 +221,13 @@ impl CommandHandler for MailCmd {
             }
             Some("clear") => {
                 with_state(|state| { state.persisted.mail.remove(&uuid); state.save_persisted(); }).ok_or_else(unavailable)?;
-                say(&sender, "Correos borrados.");
+                say(&sender, i18n::tr("Correos borrados.", "Mail deleted."));
             }
             Some(target) => {
                 if tokens.len() < 2 {
-                    return Err(fail("Uso: /mail <jugador> <mensaje>"));
+                    return Err(fail(i18n::tr("Uso: /mail <jugador> <mensaje>", "Usage: /mail <player> <message>")));
                 }
-                let to_uuid = uuid_by_name(&server, target).ok_or_else(|| fail("Destinatario desconocido."))?;
+                let to_uuid = uuid_by_name(&server, target).ok_or_else(|| fail(i18n::tr("Destinatario desconocido.", "Unknown recipient.")))?;
                 let body = tokens[1..].join(" ");
                 with_state(|s| {
                     let msg = MailMessage {
@@ -233,7 +240,7 @@ impl CommandHandler for MailCmd {
                     s.save_persisted();
                 })
                 .ok_or_else(unavailable)?;
-                say(&sender, &format!("Correo enviado a {target}."));
+                say(&sender, &i18n::trf("Correo enviado a {}.", "Mail sent to {}.", &[&target]));
             }
         }
         Ok(1)
@@ -247,10 +254,10 @@ impl CommandHandler for ReplyCmd {
         let uuid = logic::uuid_string(host::key_of(&me));
         let body = greedy_arg(&args, "args").trim().to_string();
         if body.is_empty() {
-            return Err(fail("Uso: /r <mensaje>"));
+            return Err(fail(i18n::tr("Uso: /r <mensaje>", "Usage: /r <message>")));
         }
         let target_uuid = with_state(|state| state.persisted.reply_target.get(&uuid).cloned()).ok_or_else(unavailable)?
-            .ok_or_else(|| fail("No tienes a quién responder."))?;
+            .ok_or_else(|| fail(i18n::tr("No tienes a quién responder.", "You have no one to reply to.")))?;
         let (ignored, blocked, spy) = with_state(|s| {
             let ignored = s.persisted.ignored.get(&target_uuid).is_some_and(|l| l.contains(&uuid));
             let blocked = s.persisted.msg_off.get(&target_uuid).copied().unwrap_or(false)
@@ -260,10 +267,10 @@ impl CommandHandler for ReplyCmd {
         })
         .ok_or_else(unavailable)?;
         if ignored || blocked {
-            return Err(fail("Ese jugador no acepta respuestas ahora."));
+            return Err(fail(i18n::tr("Ese jugador no acepta respuestas ahora.", "That player is not accepting replies right now.")));
         }
         let target = player_by_uuid_string(&_server, &target_uuid);
-        let target_name = target.as_ref().map_or_else(|| "(desconectado)".to_string(), |player| player.get_name());
+        let target_name = target.as_ref().map_or_else(|| i18n::tr("(desconectado)", "(offline)").to_string(), |player| player.get_name());
         let text = format!("{} -> {}: {}", me.get_name(), target_name, body);
         if let Some(player) = &target {
             player.send_system_message(TextComponent::text(&text), false);
@@ -274,7 +281,7 @@ impl CommandHandler for ReplyCmd {
             }
         }
         with_state(|state| { state.persisted.reply_target.insert(target_uuid, uuid); state.save_persisted(); });
-        say(&sender, &format!("Respuesta enviada: {body}"));
+        say(&sender, &i18n::trf("Respuesta enviada: {}", "Reply sent: {}", &[&body]));
         Ok(1)
     }
 }
@@ -286,7 +293,7 @@ impl CommandHandler for RToggleCmd {
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         let (uuid, label, mode_token) = if tokens.len() > 1 {
-            let other = server.get_player_by_name(tokens[0]).ok_or_else(|| fail("Jugador no conectado."))?;
+            let other = server.get_player_by_name(tokens[0]).ok_or_else(|| fail(i18n::msg(i18n::PLAYER_NOT_FOUND)))?;
             (logic::uuid_string(host::key_of(&other)), other.get_name(), tokens.get(1).copied())
         } else {
             (logic::uuid_string(host::key_of(&me)), me.get_name(), tokens.first().copied())
@@ -299,7 +306,8 @@ impl CommandHandler for RToggleCmd {
             next
         })
         .ok_or_else(unavailable)?;
-        say(&sender, &format!("Respuestas de {label}: {}.", if on { "activadas" } else { "desactivadas" }));
+        let mode = if on { i18n::tr("activadas", "enabled") } else { i18n::tr("desactivadas", "disabled") };
+        say(&sender, &i18n::trf("Respuestas de {}: {}.", "Replies for {}: {}.", &[&label, mode]));
         Ok(1)
     }
 }
@@ -309,7 +317,7 @@ impl CommandHandler for HelpOpCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let body = greedy_arg(&args, "args").trim().to_string();
         if body.is_empty() {
-            return Err(fail("Uso: /helpop <mensaje>"));
+            return Err(fail(i18n::tr("Uso: /helpop <mensaje>", "Usage: /helpop <message>")));
         }
         let from = sender.get_name();
         let mut count = 0;
@@ -319,7 +327,8 @@ impl CommandHandler for HelpOpCmd {
                 count += 1;
             }
         }
-        say(&sender, &format!("Solicitud enviada a {count} miembro(s) del staff."));
+        let count_label = count.to_string();
+        say(&sender, &i18n::trf("Solicitud enviada a {} miembro(s) del staff.", "Request sent to {} staff member(s).", &[&count_label]));
         Ok(1)
     }
 }
@@ -333,10 +342,11 @@ impl CommandHandler for CustomTextCmd {
         })
         .ok_or_else(unavailable)?;
         if key.is_empty() {
-            say(&sender, &format!("Textos: {}", if keys.is_empty() { "ninguno".into() } else { keys.join(", ") }));
+            let texts = if keys.is_empty() { i18n::tr("ninguno", "none").to_string() } else { keys.join(", ") };
+            say(&sender, &i18n::trf("Textos: {}", "Texts: {}", &[&texts]));
             return Ok(1);
         }
-        let Some(lines) = lines else { return Err(fail(&format!("Texto '{key}' no definido."))); };
+        let Some(lines) = lines else { return Err(fail(&i18n::trf("Texto '{}' no definido.", "Text '{}' is not defined.", &[&key]))); };
         for line in lines { say(&sender, &line); }
         Ok(1)
     }
@@ -346,7 +356,7 @@ struct RulesCmd;
 impl CommandHandler for RulesCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let rules = with_state(|state| state.cfg.rules.clone()).ok_or_else(unavailable)?;
-        say(&sender, "--- Reglas ---");
+        say(&sender, i18n::tr("--- Reglas ---", "--- Rules ---"));
         for (i, rule) in rules.iter().enumerate() { say(&sender, &format!("{}. {}", i + 1, rule)); }
         Ok(1)
     }
@@ -379,17 +389,17 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         ctx.register_permission(&perm(n, d, l))?;
     }
 
-    reg(ctx, greedy_cmd("broadcastworld", "Anunciar en un mundo", BroadcastWorldCmd), "pumpkin_essentials:broadcastworld")?;
-    reg(ctx, greedy_cmd("msgtoggle", "Alternar mensajes", MsgToggleCmd), "pumpkin_essentials:msgtoggle")?;
-    reg(ctx, greedy_cmd("socialspy", "Espiar mensajes", SocialSpyCmd), "pumpkin_essentials:socialspy")?;
-    reg(ctx, greedy_cmd("ignore", "Ignorar jugadores", IgnoreCmd), "pumpkin_essentials:ignore")?;
-    reg(ctx, greedy_cmd("nick", "Cambiar apodo", NickCmd), "pumpkin_essentials:nick")?;
-    reg(ctx, one_arg(&["realname"], "Nombre real", "name", RealNameCmd), "pumpkin_essentials:realname")?;
-    reg(ctx, greedy_cmd("mail", "Correo interno", MailCmd), "pumpkin_essentials:mail")?;
-    reg(ctx, greedy_cmd("r", "Responder", ReplyCmd), "pumpkin_essentials:r")?;
-    reg(ctx, greedy_cmd("rtoggle", "Alternar respuestas", RToggleCmd), "pumpkin_essentials:rtoggle")?;
-    reg(ctx, greedy_cmd("helpop", "Pedir ayuda", HelpOpCmd), "pumpkin_essentials:helpop")?;
-    reg(ctx, greedy_cmd("customtext", "Texto configurado", CustomTextCmd), "pumpkin_essentials:customtext")?;
-    reg(ctx, no_arg(&["rules"], "Reglas del servidor", RulesCmd), "pumpkin_essentials:rules")?;
+    reg(ctx, greedy_cmd("broadcastworld", i18n::tr("Anunciar en un mundo", "Announce in a world"), BroadcastWorldCmd), "pumpkin_essentials:broadcastworld")?;
+    reg(ctx, greedy_cmd("msgtoggle", i18n::tr("Alternar mensajes", "Toggle messages"), MsgToggleCmd), "pumpkin_essentials:msgtoggle")?;
+    reg(ctx, greedy_cmd("socialspy", i18n::tr("Espiar mensajes", "Spy on messages"), SocialSpyCmd), "pumpkin_essentials:socialspy")?;
+    reg(ctx, greedy_cmd("ignore", i18n::tr("Ignorar jugadores", "Ignore players"), IgnoreCmd), "pumpkin_essentials:ignore")?;
+    reg(ctx, greedy_cmd("nick", i18n::tr("Cambiar apodo", "Change nickname"), NickCmd), "pumpkin_essentials:nick")?;
+    reg(ctx, one_arg(&["realname"], i18n::tr("Nombre real", "Real name"), "name", RealNameCmd), "pumpkin_essentials:realname")?;
+    reg(ctx, greedy_cmd("mail", i18n::tr("Correo interno", "Internal mail"), MailCmd), "pumpkin_essentials:mail")?;
+    reg(ctx, greedy_cmd("r", i18n::tr("Responder", "Reply"), ReplyCmd), "pumpkin_essentials:r")?;
+    reg(ctx, greedy_cmd("rtoggle", i18n::tr("Alternar respuestas", "Toggle replies"), RToggleCmd), "pumpkin_essentials:rtoggle")?;
+    reg(ctx, greedy_cmd("helpop", i18n::tr("Pedir ayuda", "Request help"), HelpOpCmd), "pumpkin_essentials:helpop")?;
+    reg(ctx, greedy_cmd("customtext", i18n::tr("Texto configurado", "Configured text"), CustomTextCmd), "pumpkin_essentials:customtext")?;
+    reg(ctx, no_arg(&["rules"], i18n::tr("Reglas del servidor", "Server rules"), RulesCmd), "pumpkin_essentials:rules")?;
     Ok(())
 }

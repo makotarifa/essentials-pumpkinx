@@ -1,6 +1,7 @@
 //! Pure helpers for the VEssentials-style commands: flyspeed validation,
 //! AFK tracking and game-mode parsing. Kept host-independent for unit tests.
 
+use crate::i18n;
 use crate::logic::{self, Key};
 use crate::state::PersistedState;
 use pumpkin_plugin_api::common::GameMode;
@@ -46,9 +47,9 @@ impl Afks {
 
 /// Parse the player-facing fly speed. The accepted range is inclusive 0.0-10.0.
 pub fn parse_fly_speed(raw: &str) -> Result<f32, String> {
-    let value: f32 = raw.parse().map_err(|_| format!("Invalid fly speed '{raw}'. Use a number from 0.0 to 10.0."))?;
+    let value: f32 = raw.parse().map_err(|_| i18n::trf("Velocidad de vuelo inválida: '{}'. Usa un número entre 0.0 y 10.0.", "Invalid fly speed '{}'. Use a number from 0.0 to 10.0.", &[raw]))?;
     if !value.is_finite() || !(0.0..=10.0).contains(&value) {
-        return Err(format!("Fly speed must be between 0.0 and 10.0 (got {raw})."));
+        return Err(i18n::trf("La velocidad de vuelo debe estar entre 0.0 y 10.0 (se obtuvo {}).", "Fly speed must be between 0.0 and 10.0 (got {}).", &[raw]));
     }
     Ok(value)
 }
@@ -81,9 +82,9 @@ pub fn mode_name(mode: &GameMode) -> &'static str {
 
 /// Parse the player-facing walk speed (`/speed`). The accepted range is 0.1-10.0.
 pub fn parse_walk_speed(raw: &str) -> Result<f32, String> {
-    let value: f32 = raw.parse().map_err(|_| format!("Invalid walk speed '{raw}'. Use a number from 0.1 to 10.0."))?;
+    let value: f32 = raw.parse().map_err(|_| i18n::trf("Velocidad al caminar inválida: '{}'. Usa un número entre 0.1 y 10.0.", "Invalid walk speed '{}'. Use a number from 0.1 to 10.0.", &[raw]))?;
     if !value.is_finite() || !(0.1..=10.0).contains(&value) {
-        return Err(format!("Walk speed must be between 0.1 and 10.0 (got {raw})."));
+        return Err(i18n::trf("La velocidad al caminar debe estar entre 0.1 y 10.0 (se obtuvo {}).", "Walk speed must be between 0.1 and 10.0 (got {}).", &[raw]));
     }
     Ok(value)
 }
@@ -95,9 +96,9 @@ pub fn engine_walk_speed(value: f32) -> f32 {
 
 /// Parse an experience level for `/exp`; rejects negative values.
 pub fn parse_level(raw: &str) -> Result<i32, String> {
-    let level: i32 = raw.parse().map_err(|_| format!("Invalid experience level '{raw}'."))?;
+    let level: i32 = raw.parse().map_err(|_| i18n::trf("Nivel de experiencia inválido: '{}'.", "Invalid experience level '{}'.", &[raw]))?;
     if level < 0 {
-        return Err("Experience level cannot be negative.".into());
+        return Err(i18n::tr("El nivel de experiencia no puede ser negativo.", "Experience level cannot be negative.").into());
     }
     Ok(level)
 }
@@ -155,12 +156,12 @@ pub fn sort_near(mut entries: Vec<NearEntry>) -> Vec<NearEntry> {
 /// Parse an absolute or `~relative` coordinate for /tppos.
 pub fn parse_tp_coord(raw: &str, current: f64) -> Result<f64, String> {
     let value = if let Some(rest) = raw.strip_prefix('~') {
-        if rest.is_empty() { current } else { current + rest.parse::<f64>().map_err(|_| format!("Invalid coordinate '{raw}'."))? }
+        if rest.is_empty() { current } else { current + rest.parse::<f64>().map_err(|_| i18n::trf("Coordenada inválida: '{}'.", "Invalid coordinate '{}'.", &[raw]))? }
     } else {
-        raw.parse::<f64>().map_err(|_| format!("Invalid coordinate '{raw}'."))?
+        raw.parse::<f64>().map_err(|_| i18n::trf("Coordenada inválida: '{}'.", "Invalid coordinate '{}'.", &[raw]))?
     };
     if !value.is_finite() || value.abs() > 30_000_000.0 {
-        return Err("Coordinate out of range.".into());
+        return Err(i18n::tr("Coordenada fuera de rango.", "Coordinate out of range.").into());
     }
     Ok(value)
 }
@@ -200,7 +201,7 @@ pub fn parse_duration(raw: &str) -> Result<u64, String> {
     } else {
         (text.as_str(), 1)
     };
-    let value: u64 = num.parse().map_err(|_| format!("Duración inválida: '{raw}'."))?;
+    let value: u64 = num.parse().map_err(|_| i18n::trf("Duración inválida: '{}'.", "Invalid duration: '{}'.", &[raw]))?;
     Ok(value.saturating_mul(mult))
 }
 

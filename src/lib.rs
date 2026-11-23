@@ -11,6 +11,7 @@ pub mod config;
 pub mod extras;
 pub mod logic;
 pub mod store;
+pub mod i18n;
 
 #[cfg(target_family = "wasm")]
 mod cmdutil;

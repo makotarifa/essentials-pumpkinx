@@ -6,6 +6,7 @@ use crate::{
     economy::Economy,
     kits::Kits,
     state::PersistedState,
+    i18n,
     logic::{Backs, Cooldowns, Key, Tpas, Warmups},
     store::{HomesFile, Location, WarpsFile},
 };
@@ -159,7 +160,7 @@ where
     P: HostPlayer + ?Sized,
 {
     let Some(world) = server.world_by_name(&loc.world) else {
-        return Err(format!("World '{}' no longer exists.", loc.world));
+        return Err(i18n::trf("El mundo '{}' ya no existe.", "World '{}' no longer exists.", &[&loc.world]));
     };
     if player.world_name() == loc.world {
         player.teleport_same_world(loc.pos(), Some(loc.yaw), Some(loc.pitch), world);
