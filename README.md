@@ -192,6 +192,7 @@ New `config.json` keys (with default values): `near_max_radius=200`, `tpr_min_ra
 | `/helpop <message>` | `pumpkin_essentials:helpop` | Sends the message to players with `:helpop.receive` |
 | `/backup` | `pumpkin_essentials:backup` | Copies the plugin JSON files to `backups/<timestamp>/` |
 | `/essentials` | `pumpkin_essentials:essentials` | Prints the plugin name and version |
+| `/essentials help` | `pumpkin_essentials:essentials` | Lists all plugin commands grouped by domain |
 | `/ext [player]` | `pumpkin_essentials:ext` | Extinguishes fire (`set_fire_ticks(0)`) |
 | `/mute <player> [duration] [reason]` | `pumpkin_essentials:mute` | Mutes chat (alias `/unmute`) |
 | `/tempban <player> <duration> [reason]` | `pumpkin_essentials:tempban` | Temporarily bans and kicks the player |

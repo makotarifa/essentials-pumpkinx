@@ -224,6 +224,48 @@ impl CommandHandler for EssentialsCmd {
     }
 }
 
+const HELP_GROUPS: &[(&str, &[&str])] = &[
+    ("Homes", &["sethome", "home", "delhome", "homes", "listhomes", "renamehome", "sethomelimit"]),
+    ("Warps", &["setwarp", "delwarp", "warp", "warps", "warpinfo"]),
+    ("TPA", &["tpa", "tpaccept", "tpdeny", "tpahere", "tptoggle", "tpaall", "tpacancel", "tpauto"]),
+    ("Movement", &["back", "spawn", "setspawn", "top", "tphere", "tpall", "bottom", "tppos", "tpr", "settpr", "tpo", "tpoffline", "tpohere", "world", "jump", "fly", "flyspeed"]),
+    ("Gamemode", &["gm", "gma", "gmc", "gms", "gmsp"]),
+    ("Info", &["ping", "playtime", "near", "seen", "whois", "info", "gc", "compass", "depth", "getpos"]),
+    ("Chat", &["broadcastworld", "msgtoggle", "socialspy", "ignore", "nick", "realname", "mail", "r", "rtoggle", "helpop", "customtext", "rules"]),
+    ("Moderation", &["mute", "unmute", "tempban", "kickall", "vanish", "god", "sudo", "jail", "togglejail", "jailedplayers", "setjail", "deljail", "jails"]),
+    ("Economy", &["balance", "bal", "balancetop", "eco", "pay", "payconfirm", "paytoggle", "payconfirmtoggle", "sell", "worth", "setworth"]),
+    ("Kits", &["kit", "createkit", "delkit", "kitreset", "showkit"]),
+    ("Items", &["item", "itemdb", "itemlore", "itemname", "repair", "unlimited", "hat", "more", "book", "firework", "powertool", "powertoollist", "powertooltoggle", "condense", "invsee", "enderchest", "clearinventory", "clearinventoryconfirmtoggle", "remove", "spawnmob", "spawner", "skull", "kittycannon", "beezooka", "fireball", "potion"]),
+    ("Environment", &["anvil", "cartographytable", "grindstone", "loom", "smithingtable", "workbench", "disposal", "editsign", "stonecutter", "ice", "tree", "bigtree", "break", "burn", "lightning", "thunder", "nuke", "ptime", "pweather"]),
+    ("Misc", &["afk", "heal", "feed", "speed", "exp", "rest", "backup", "essentials", "ext", "antioch", "suicide"]),
+];
+
+struct EssentialsHelpCmd;
+impl CommandHandler for EssentialsHelpCmd {
+    fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
+        let sub = greedy_arg(&args, "sub").trim().to_ascii_lowercase();
+        if sub != "help" {
+            say(&sender, "Unknown subcommand. Use /essentials help.");
+            return Ok(1);
+        }
+        say(&sender, "EssentialsPumpkinX commands (149):");
+        for (group, commands) in HELP_GROUPS {
+            let mut line = format!("{group} ({}):", commands.len());
+            for command in *commands {
+                let piece = format!(" /{command}");
+                if line.len() + piece.len() > 240 {
+                    say(&sender, &line);
+                    line = format!("{group} (cont.):");
+                }
+                line.push_str(&piece);
+            }
+            say(&sender, &line);
+        }
+        say(&sender, "Use /help for the full server command tree.");
+        Ok(1)
+    }
+}
+
 struct ExtCmd;
 impl CommandHandler for ExtCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
@@ -339,7 +381,7 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         "pumpkin_essentials:rest",
     )?;
     reg(ctx, no_arg(&["backup"], "Copiar datos", BackupCmd), "pumpkin_essentials:backup")?;
-    reg(ctx, no_arg(&["essentials"], "Plugin version", EssentialsCmd), "pumpkin_essentials:essentials")?;
+    reg(ctx, Command::new(&["essentials".to_string()], "Plugin version").execute(EssentialsCmd).then(word("sub").execute(EssentialsHelpCmd)), "pumpkin_essentials:essentials")?;
     reg(ctx, greedy_cmd("ext", "Apagar fuego", ExtCmd), "pumpkin_essentials:ext")?;
     reg(ctx, greedy_cmd("antioch", "Granada de Antioquía", AntiochCmd), "pumpkin_essentials:antioch")?;
     reg(ctx, no_arg(&["suicide"], "Quitarse la vida", SuicideCmd), "pumpkin_essentials:suicide")?;
