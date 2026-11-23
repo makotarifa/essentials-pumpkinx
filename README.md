@@ -310,6 +310,102 @@ The **153 official commands** of EssentialsX 2.x (`plugin.yml`) were compared wi
 
 After this iteration the plugin registers **149 command names** (including its own aliases such as `/bal`, `/gm`, `/listhomes`, and `/payconfirm`). No core commands or commands from other plugins are duplicated.
 
+## Migration status vs EssentialsX 2.x
+
+EssentialsPumpkinX registers **149 command names**. The 153 official EssentialsX 2.x commands split into four groups: 88 implemented here, 19 already provided by the Pumpkin core or other server plugins, 43 implemented with an API limitation, and 3 added after the audit. The complete row-by-row inventory is in [`COMPAT.md`](COMPAT.md).
+
+### Commands added in this project (149)
+
+| Domain | Commands |
+|---|---|
+| Homes (7) | `sethome`, `home`, `delhome`, `homes`, `listhomes`, `renamehome`, `sethomelimit` |
+| Warps (5) | `setwarp`, `delwarp`, `warp`, `warps`, `warpinfo` |
+| TPA (8) | `tpa`, `tpaccept`, `tpdeny`, `tpahere`, `tptoggle`, `tpaall`, `tpacancel`, `tpauto` |
+| Movement (17) | `back`, `spawn`, `setspawn`, `top`, `tphere`, `tpall`, `bottom`, `tppos`, `tpr`, `settpr`, `tpo`, `tpoffline`, `tpohere`, `world`, `jump`, `fly`, `flyspeed` |
+| Gamemode (5) | `gm`, `gma`, `gmc`, `gms`, `gmsp` |
+| Info (10) | `ping`, `playtime`, `near`, `seen`, `whois`, `info`, `gc`, `compass`, `depth`, `getpos` |
+| Chat (12) | `broadcastworld`, `msgtoggle`, `socialspy`, `ignore`, `nick`, `realname`, `mail`, `r`, `rtoggle`, `helpop`, `customtext`, `rules` |
+| Moderation (13) | `mute`, `unmute`, `tempban`, `kickall`, `vanish`, `god`, `sudo`, `jail`, `togglejail`, `jailedplayers`, `setjail`, `deljail`, `jails` |
+| Economy (11) | `balance`, `bal`, `balancetop`, `eco`, `pay`, `payconfirm`, `paytoggle`, `payconfirmtoggle`, `sell`, `worth`, `setworth` |
+| Kits (5) | `kit`, `createkit`, `delkit`, `kitreset`, `showkit` |
+| Items (26) | `item`, `itemdb`, `itemlore`, `itemname`, `repair`, `unlimited`, `hat`, `more`, `book`, `firework`, `powertool`, `powertoollist`, `powertooltoggle`, `condense`, `invsee`, `enderchest`, `clearinventory`, `clearinventoryconfirmtoggle`, `remove`, `spawnmob`, `spawner`, `skull`, `kittycannon`, `beezooka`, `fireball`, `potion` |
+| Environment (19) | `anvil`, `cartographytable`, `grindstone`, `loom`, `smithingtable`, `workbench`, `disposal`, `editsign`, `stonecutter`, `ice`, `tree`, `bigtree`, `break`, `burn`, `lightning`, `thunder`, `nuke`, `ptime`, `pweather` |
+| Misc (11) | `afk`, `heal`, `feed`, `speed`, `exp`, `rest`, `backup`, `essentials`, `ext`, `antioch`, `suicide` |
+
+### Covered by the core or other plugins (19 — not duplicated here)
+
+| Command | Provided by |
+|---|---|
+| `ban` | Pumpkin core (`/ban`) |
+| `banip` | Pumpkin core (`/banip`) |
+| `broadcast` | PumpChat (`/broadcast`) |
+| `enchant` | Pumpkin core (`/enchant`) |
+| `gamemode` | Pumpkin core (`/gamemode`); `/gmc`, `/gms`, `/gma`, `/gmsp` aliases live in EssentialsPumpkinX |
+| `give` | Pumpkin core (`/give`) |
+| `help` | Pumpkin core (`/help`) |
+| `kick` | Pumpkin core (`/kick`) |
+| `kill` | Pumpkin core (`/kill`) |
+| `list` | Pumpkin core (`/list`) |
+| `me` | Pumpkin core (`/me`) |
+| `motd` | dMOTD (`/motd`) |
+| `msg` | PumpChat (`/msg`) |
+| `recipe` | Pumpkin core (`/recipe`) |
+| `time` | Pumpkin core (`/time`) |
+| `tp` | Pumpkin core (`/tp`) |
+| `unban` | Pumpkin core (`/pardon`) |
+| `unbanip` | Pumpkin core (`/pardonip`) |
+| `weather` | Pumpkin core (`/weather`) |
+
+### Limited / not fully migrated (43)
+
+These commands exist but cannot be exact ports with WIT 0.1. The root causes are: no arbitrary NBT on items or block entities, no per-player time, no IP-ban management from plugins, no way to intercept PumpChat's `/msg` without duplicating it, no queryable entity type from `get_entities()`, and no reliable item-consumption event.
+
+| Command | Why it is not a full port |
+|---|---|
+| `antioch` | `create_explosion` at an approximate point, no real TNT entity |
+| `backup` | plugin JSON only, no world or `save-all` |
+| `beezooka` | immediate explosion, no 1-second delay |
+| `book` | no author/title/pages API; gives a `writable_book` |
+| `bottom` | uses `get_min_y + 1` without safe-location search |
+| `break` | no block-break event or drops |
+| `bigtree` | simplified large oak generation |
+| `clearinventory` | in-memory confirmation, lost on reload |
+| `condense` | recreates `ItemStack`s and loses NBT/enchantments |
+| `enderchest` | read-only view when the target is another player |
+| `fireball` | `spawn_entity` + `set_velocity`, no projectile metadata |
+| `gc` | no per-world chunk/entity count |
+| `ice` | `set_freeze_ticks` + zero velocity, partial freeze |
+| `ignore` | internal messaging only, not PumpChat `/msg` |
+| `info` | only data exposed by the API (version/TPS/memory/worlds) |
+| `invsee` | read-only view of another player's inventory |
+| `kit` | stores only id and count per item |
+| `kittycannon` | simple spawns, no variants or taming |
+| `msgtoggle` | does not intercept PumpChat `/msg`; affects internal `/r` and `/mail` |
+| `nick` | uses tab-list and may be overwritten by other plugins |
+| `nuke` | grid explosions, no timed TNT |
+| `tpoffline` | uses this plugin's last saved location, not Pumpkin usercache |
+| `potion` | no effect NBT; gives a named potion |
+| `ptime` | no per-player time in the API; adjusts world time |
+| `r` | uses the reply target stored by this plugin |
+| `rtoggle` | internal messaging only |
+| `remove` | `get_entities()` does not expose type; filter validated but not applied |
+| `repair` | WIT 0.1 has no `get_damage`/`set_damage` on `item-stack` |
+| `seen` | only players seen since the plugin was installed |
+| `sell` | no enchantments/NBT; items without a price are not sold |
+| `setworth` | price per item key, no NBT |
+| `editsign` | target block approximated to 5 blocks |
+| `skull` | no player profile/texture |
+| `socialspy` | only copies this plugin's `/r` and `/mail` |
+| `spawner` | `set_block_by_name` without mob-type NBT |
+| `sudo` | blocklist of dangerous commands; runs with the target's permissions |
+| `tempbanip` | WIT API has no IP-ban management; only `/tempban` by UUID |
+| `top` | uses `get_top_block_y` without safe-location search |
+| `tpohere` | API does not allow moving offline entities |
+| `tree` | simplified oak generation |
+| `unlimited` | no reliable item-consumption event to restock |
+| `world` | teleports to world spawn, no Nether scaling |
+| `worth` | price per item key, no NBT |
+
 ## Session persistence (`state.json`)
 
 New file in `plugins/data/pumpkin_essentials/`:
