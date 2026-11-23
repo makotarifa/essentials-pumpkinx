@@ -1,5 +1,8 @@
 # EssentialsPumpkinX
 
+
+[![CI](https://github.com/makotarifa/essentials-pumpkinx/actions/workflows/ci.yml/badge.svg)](https://github.com/makotarifa/essentials-pumpkinx/actions/workflows/ci.yml)
+
 A single WASM plugin for Pumpkin that merges **PumpkinEssentials 0.1.0** (homes, warps, `/tpa`, `/back`, warmups/cooldowns), **EssentialsX**-style utilities, and the **VEssentials 1.2.7** functions (`/gm[a|c|s|sp]`, `/fly`, `/flyspeed`, `/afk`).
 
 ## Compatibility
@@ -39,6 +42,11 @@ cp target/wasm32-wasip2/release/essentials_pumpkinx.wasm ./essentials_pumpkinx.w
 `cargo check --target wasm32-wasip2` is part of the verification because ~70% of the code (everything that depends on Pumpkin's WIT API) only compiles for that target and is therefore only checked when building the `.wasm`.
 
 `Cargo.toml` pins the Pumpkin upstream repository to the server tag; there are no private dependencies.
+
+## CI
+
+- `ci.yml` runs on pushes to `main`, pull requests, and manual dispatch: host unit tests, WASM check, release build, checksum generation, and artifact upload.
+- `release.yml` runs on `v*` tags: the same checks, then publishes the `.wasm` and `.sha256` as a GitHub Release.
 
 ## Installation and migration
 
@@ -183,7 +191,7 @@ New `config.json` keys (with default values): `near_max_radius=200`, `tpr_min_ra
 | `/rules` | `pumpkin_essentials:rules` | Shows the rules from `config.json` |
 | `/helpop <message>` | `pumpkin_essentials:helpop` | Sends the message to players with `:helpop.receive` |
 | `/backup` | `pumpkin_essentials:backup` | Copies the plugin JSON files to `backups/<timestamp>/` |
-| `/essentials [version]` | `pumpkin_essentials:essentials` | Plugin information |
+| `/essentials` | `pumpkin_essentials:essentials` | Prints the plugin name and version |
 | `/ext [player]` | `pumpkin_essentials:ext` | Extinguishes fire (`set_fire_ticks(0)`) |
 | `/mute <player> [duration] [reason]` | `pumpkin_essentials:mute` | Mutes chat (alias `/unmute`) |
 | `/tempban <player> <duration> [reason]` | `pumpkin_essentials:tempban` | Temporarily bans and kicks the player |

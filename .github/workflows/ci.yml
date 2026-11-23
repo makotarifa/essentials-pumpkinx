@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: test and build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust with WASI target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Unit tests (host)
+        run: cargo test --lib
+
+      - name: Check WASM target
+        run: cargo check --target wasm32-wasip2
+
+      - name: Release build
+        run: cargo build --release --target wasm32-wasip2
+
+      - name: Generate checksum
+        working-directory: target/wasm32-wasip2/release
+        run: sha256sum essentials_pumpkinx.wasm > essentials_pumpkinx.wasm.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: essentials-pumpkinx-wasm
+          path: |
+            target/wasm32-wasip2/release/essentials_pumpkinx.wasm
+            target/wasm32-wasip2/release/essentials_pumpkinx.wasm.sha256
+          if-no-files-found: error

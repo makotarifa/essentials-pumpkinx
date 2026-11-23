@@ -1,6 +1,6 @@
 [package]
 name = "essentials_pumpkinx"
-version = "1.0.0"
+version = "0.1.0"
 edition = "2021"
 description = "EssentialsPumpkinX: homes, warps, tpa, back, gamemode, fly, flyspeed and afk (WASM)"
 license = "GPL-3.0"
