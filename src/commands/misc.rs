@@ -218,13 +218,8 @@ impl CommandHandler for BackupCmd {
 
 struct EssentialsCmd;
 impl CommandHandler for EssentialsCmd {
-    fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let sub = greedy_arg(&args, "args").trim().to_ascii_lowercase();
-        if sub.is_empty() || sub == "version" {
-            say(&sender, &format!("EssentialsPumpkinX {} — GPL-3.0 — 86 comandos — Pumpkin 0.2.2", env!("CARGO_PKG_VERSION")));
-        } else {
-            say(&sender, "Subcomandos disponibles: version.");
-        }
+    fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
+        say(&sender, &format!("EssentialsPumpkinX {}", env!("CARGO_PKG_VERSION")));
         Ok(1)
     }
 }
@@ -344,7 +339,7 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         "pumpkin_essentials:rest",
     )?;
     reg(ctx, no_arg(&["backup"], "Copiar datos", BackupCmd), "pumpkin_essentials:backup")?;
-    reg(ctx, greedy_cmd("essentials", "Información del plugin", EssentialsCmd), "pumpkin_essentials:essentials")?;
+    reg(ctx, no_arg(&["essentials"], "Plugin version", EssentialsCmd), "pumpkin_essentials:essentials")?;
     reg(ctx, greedy_cmd("ext", "Apagar fuego", ExtCmd), "pumpkin_essentials:ext")?;
     reg(ctx, greedy_cmd("antioch", "Granada de Antioquía", AntiochCmd), "pumpkin_essentials:antioch")?;
     reg(ctx, no_arg(&["suicide"], "Quitarse la vida", SuicideCmd), "pumpkin_essentials:suicide")?;
