@@ -5,6 +5,8 @@
 
 A single WASM plugin for Pumpkin that merges **PumpkinEssentials 0.1.0** (homes, warps, `/tpa`, `/back`, warmups/cooldowns), **EssentialsX**-style utilities, and the **VEssentials 1.2.7** functions (`/gm[a|c|s|sp]`, `/fly`, `/flyspeed`, `/afk`).
 
+> **Development status:** EssentialsPumpkinX is under active development and is not feature-complete. Some EssentialsX behaviours cannot be reproduced with the current Pumpkin WIT API; the exact gaps are documented in [`COMPAT.md`](COMPAT.md). Bug reports and pull requests are welcome at https://github.com/makotarifa/essentials-pumpkinx/pulls.
+
 ## Compatibility
 
 - Server: Pumpkin `0.2.2+26.3-26.60` (Java protocol 777 / Bedrock 1.26.60).
