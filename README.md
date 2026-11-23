@@ -9,6 +9,20 @@ Un único plugin WASM para Pumpkin que fusiona **PumpkinEssentials 0.1.0** (home
 - Permisos WASI: `fs.read.data` y `fs.write.data`.
 - `PluginMetadata.name` es **`pumpkin_essentials`** por diseño: todos los nodos de permiso usan ese namespace y la carpeta de datos es la misma de siempre.
 
+
+## Estructura del código
+
+```text
+src/
+  cmdutil.rs        // helpers compartidos de la capa de comandos
+  commands/         // registro central + un archivo por dominio
+    homes.rs warps.rs tpa.rs movement.rs gamemode.rs info.rs
+    chat.rs moderation.rs economy.rs kits.rs items.rs
+    environment.rs misc.rs mod.rs
+  store/persist.rs  // FileStore: carga, migración y guardado atómico
+  host/host_traits.rs // Adapter mínimo sobre la API WIT
+```
+
 ## Compilación
 
 ```sh
@@ -16,9 +30,12 @@ rustup toolchain install stable
 rustup target add wasm32-wasip2
 cd dev/essentials-fusion
 cargo test --lib
+cargo check --target wasm32-wasip2
 cargo build --release --target wasm32-wasip2
 cp target/wasm32-wasip2/release/essentials_fusion.wasm ./essentials_fusion.wasm
 ```
+
+`cargo check --target wasm32-wasip2` se añade a la verificación porque ~70% del código (todo lo que depende de la API WIT de Pumpkin) solo se compila con ese objetivo y por tanto solo se comprueba al construir el `.wasm`.
 
 `Cargo.toml` fija el repositorio upstream de Pumpkin al tag del servidor; no hay dependencias privadas.
 
@@ -282,7 +299,7 @@ Igual que `state.json`/`economy.json`: `load_kits` solo lee, aplica migraciones 
 
 ### Iteración 9 — Auditoría final y cierre de huecos
 
-Se compararon los **153 comandos oficiales** de EssentialsX 2.x (`plugin.yml`) con los 141 nombres que el plugin registraba y con los comandos del núcleo Pumpkin y de PumpChat/dMOTD. El inventario completo está en [`COMPAT.md`](COMPAT.md): 88 IMPLEMENTADO, 19 CUBIERTO, 43 LIMITADO y 3 AÑADIDO AHORA.
+Se compararon los **153 comandos oficiales** de EssentialsX 2.x (`plugin.yml`) con los 146 nombres que el plugin registraba y con los comandos del núcleo Pumpkin y de PumpChat/dMOTD. El inventario completo está en [`COMPAT.md`](COMPAT.md): 88 IMPLEMENTADO, 19 CUBIERTO, 43 LIMITADO y 3 AÑADIDO AHORA.
 
 | Comando | Permiso | Descripción |
 |---|---|---|
@@ -290,7 +307,7 @@ Se compararon los **153 comandos oficiales** de EssentialsX 2.x (`plugin.yml`) c
 | `/firework` | `pumpkin_essentials:firework` | Entrega un cohete pirotécnico (hueco real) |
 | `/jails` | `pumpkin_essentials:jails` | Lista las cárceles definidas con `/setjail` (hueco real) |
 
-Tras esta iteración el plugin registra **144 nombres de comando** (incluye alias propios como `/bal`, `/gm`, `/listhomes` y `/payconfirm`). No se duplican comandos del núcleo ni de otros plugins.
+Tras esta iteración el plugin registra **149 nombres de comando** (incluye alias propios como `/bal`, `/gm`, `/listhomes` y `/payconfirm`). No se duplican comandos del núcleo ni de otros plugins.
 
 ## Persistencia de sesión (`state.json`)
 

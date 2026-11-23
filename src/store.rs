@@ -18,6 +18,10 @@ use std::{
     path::Path,
 };
 
+/// Shared `FileStore` persistence pattern for `state/economy/kits`.
+pub mod persist;
+
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Location {
     pub world: String,
@@ -173,23 +177,8 @@ fn normalise_location(value: &mut Value) -> bool {
     changed
 }
 
-/// A wrapper file has exactly one top-level key (`players` or `warps`).
-fn unwrap_wrapper(value: &mut Value, key: &str) -> bool {
-    let Some(map) = value.as_object() else {
-        return false;
-    };
-    if map.len() != 1 {
-        return false;
-    }
-    let Some(inner) = map.get(key).cloned() else {
-        return false;
-    };
-    *value = inner;
-    true
-}
-
 fn normalise_homes(value: &mut Value) -> bool {
-    let mut changed = unwrap_wrapper(value, "players");
+    let mut changed = persist::unwrap_wrapper(value, "players");
     let Some(map) = value.as_object_mut() else {
         return changed;
     };
@@ -225,7 +214,7 @@ fn normalise_homes(value: &mut Value) -> bool {
 }
 
 fn normalise_warps(value: &mut Value) -> bool {
-    let mut changed = unwrap_wrapper(value, "warps");
+    let mut changed = persist::unwrap_wrapper(value, "warps");
     let Some(map) = value.as_object_mut() else {
         return changed;
     };

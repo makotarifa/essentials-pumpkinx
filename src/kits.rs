@@ -1,12 +1,12 @@
 //! Kits, cooldowns, powertools y objetos ilimitados en `kits.json`.
 //!
-//! Carga de solo lectura: los formatos legacy se normalizan en memoria y se
-//! escriben de forma diferida en el primer tick (patrón de state/economy).
+//! `Kits` implementa el patrón compartido [`FileStore`] (`crate::store::persist`):
+//! carga de solo lectura, formatos legacy normalizados en memoria y escritura
+//! diferida en el primer tick (mismo patrón que state/economy).
 
-use crate::store;
+use crate::store::persist::FileStore;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::BTreeMap, fs, io, path::Path};
+use std::{collections::BTreeMap, io, path::Path};
 
 fn schema() -> u32 {
     1
@@ -92,39 +92,39 @@ pub fn list_powertools(kits: &Kits, uuid: &str) -> Vec<(String, Vec<String>)> {
     kits.powertools.get(uuid).map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default()
 }
 
-fn unwrap_wrapper(value: &mut Value) -> bool {
-    let Some(map) = value.as_object() else { return false };
-    if map.len() != 1 { return false; }
-    let Some(inner) = map.get("kits").cloned() else { return false; };
-    *value = inner;
-    true
+impl FileStore for Kits {
+    const WRAPPER_KEY: &'static str = "kits";
+
+    fn canonical_schema() -> u32 {
+        schema()
+    }
+    fn stored_schema(&self) -> u32 {
+        self.schema
+    }
+    fn bump_schema(&mut self) {
+        self.schema = schema();
+    }
+    fn needs_migration(&self) -> bool {
+        self.needs_migration
+    }
+    fn set_needs_migration(&mut self, needs: bool) {
+        self.needs_migration = needs;
+    }
 }
 
+/// Read-only load; migration is deferred to the first tick.
 pub fn load_kits(path: &Path) -> Result<Kits, String> {
-    let text = match fs::read_to_string(path) {
-        Ok(text) if text.trim().is_empty() => return Ok(Kits::default()),
-        Ok(text) => text,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Kits::default()),
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
-    let mut value: Value = serde_json::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    let legacy = unwrap_wrapper(&mut value);
-    let mut kits: Kits = serde_json::from_value(value).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    let old_schema = kits.schema < schema();
-    if old_schema {
-        kits.schema = schema();
-    }
-    kits.needs_migration = legacy || old_schema;
-    Ok(kits)
+    Kits::load(path)
 }
 
 pub fn save_kits(path: &Path, kits: &Kits) -> io::Result<()> {
-    store::save_json(path, kits)
+    Kits::save_atomic(path, kits)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::PathBuf;
 
     fn tmpdir(tag: &str) -> PathBuf {

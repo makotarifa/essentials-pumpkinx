@@ -16,6 +16,14 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
+// Adapter over the raw Pumpkin WIT bindings (`host/host_traits.rs`). The
+// helpers below talk to the server through the `HostPlayer`/`HostServer`
+// traits so all WIT specifics live in one place; the public functions keep
+// their concrete signatures so no other module needs to change.
+mod host_traits;
+
+use host_traits::{HostPlayer, HostServer};
+
 pub struct State {
     pub cfg: Config,
     pub dir: PathBuf,
@@ -89,7 +97,11 @@ pub fn now_ms() -> u64 {
 }
 
 pub fn key_of(p: &Player) -> Key {
-    uuid_to_key(&p.get_id())
+    key_of_impl(p)
+}
+
+fn key_of_impl<P: HostPlayer + ?Sized>(p: &P) -> Key {
+    uuid_to_key(&p.id())
 }
 
 pub fn uuid_to_key(u: &Uuid) -> Key {
@@ -101,18 +113,30 @@ pub fn key_to_uuid(k: Key) -> Uuid {
 }
 
 pub fn entity_id_of(p: &Player) -> i32 {
-    p.as_entity().get_id() as i32
+    entity_id_impl(p)
+}
+
+fn entity_id_impl<P: HostPlayer + ?Sized>(p: &P) -> i32 {
+    p.entity_id()
 }
 
 /// The player's current location (world name, position, rotation).
 pub fn location_of(p: &Player) -> Location {
-    let (x, y, z) = p.get_position();
-    let e = p.as_entity();
-    Location { world: p.get_world().get_name(), x, y, z, yaw: e.get_yaw(), pitch: e.get_pitch() }
+    location_of_impl(p)
+}
+
+fn location_of_impl<P: HostPlayer + ?Sized>(p: &P) -> Location {
+    let (x, y, z) = p.position();
+    let (yaw, pitch) = p.rotation();
+    Location { world: p.world_name(), x, y, z, yaw, pitch }
 }
 
 pub fn say(p: &Player, text: &str, color: NamedColor) {
-    p.send_system_message(TextComponent::text(text).color_named(color), false);
+    say_impl(p, text, color)
+}
+
+fn say_impl<P: HostPlayer + ?Sized>(p: &P, text: &str, color: NamedColor) {
+    p.send_system_message(TextComponent::text(text).color_named(color));
 }
 pub fn ok(p: &Player, text: &str) {
     say(p, text, NamedColor::Green);
@@ -126,13 +150,21 @@ pub fn info(p: &Player, text: &str) {
 
 /// Move `p` to `loc`. Same-world uses `teleport`, cross-world uses the world-aware call.
 pub fn teleport_to(server: &Server, p: &Player, loc: &Location) -> Result<(), String> {
-    let Some(world) = server.get_world_by_name(&loc.world) else {
+    teleport_to_impl(server, p, loc)
+}
+
+fn teleport_to_impl<S, P>(server: &S, p: &P, loc: &Location) -> Result<(), String>
+where
+    S: HostServer<World = P::World>,
+    P: HostPlayer + ?Sized,
+{
+    let Some(world) = server.world_by_name(&loc.world) else {
         return Err(format!("World '{}' no longer exists.", loc.world));
     };
-    if p.get_world().get_name() == loc.world {
-        p.teleport(loc.pos(), Some(loc.yaw), Some(loc.pitch), world);
+    if p.world_name() == loc.world {
+        p.teleport_same_world(loc.pos(), Some(loc.yaw), Some(loc.pitch), world);
     } else {
-        p.teleport_world(world, loc.pos(), Some(loc.yaw), Some(loc.pitch));
+        p.teleport_cross_world(world, loc.pos(), Some(loc.yaw), Some(loc.pitch));
     }
     Ok(())
 }

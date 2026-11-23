@@ -1,13 +1,15 @@
-//! Iteración 8: bloques, entornos y efectos (EssentialsX adaptado a WIT v0.1).
+//! Entorno: mesas de trabajo (/anvil, /cartographytable, /grindstone,
+//! /loom, /smithingtable, /workbench, /disposal, /editsign, /stonecutter),
+//! /ptime, /pweather, /thunder, /ice, /tree, /bigtree, /break, /burn,
+//! /lightning y /nuke.
 
 use crate::{
-    commands,
+    cmdutil::{fail, forward, greedy_arg, greedy_node, has_level, no_arg, player_of, reg, say, unavailable, CmdResult},
     environment,
     host::{self, with_state},
-    logic::{self, TpKind},
 };
 use pumpkin_plugin_api::{
-    command::{Arg, ArgumentType, CommandError, CommandNode, CommandSender, ConsumedArgs, StringType},
+    command::{CommandError, CommandSender, ConsumedArgs},
     commands::{Command, CommandHandler},
     common::BlockPos,
     gui::Gui,
@@ -18,68 +20,6 @@ use pumpkin_plugin_api::{
     world::{BlockFlags, ExplosionInteraction},
     Context, Player, Screen, Server,
 };
-
-type CmdResult = Result<i32, CommandError>;
-
-fn fail(msg: &str) -> CommandError {
-    CommandError::CommandFailed(TextComponent::text(msg))
-}
-
-fn unavailable() -> CommandError {
-    fail("Estado no disponible.")
-}
-
-fn plain(arg: Arg) -> String {
-    match arg {
-        Arg::Simple(s) | Arg::Msg(s) => s,
-        _ => String::new(),
-    }
-}
-
-fn greedy(args: &ConsumedArgs, name: &str) -> String {
-    plain(args.get_value(name))
-}
-
-fn player_of(sender: &CommandSender) -> Result<Player, CommandError> {
-    sender.as_player().ok_or_else(|| fail("Solo jugadores."))
-}
-
-fn say(sender: &CommandSender, msg: &str) {
-    sender.send_message(TextComponent::text(msg));
-}
-
-fn greedy_node(name: &str) -> CommandNode {
-    CommandNode::argument(name, &ArgumentType::String(StringType::Greedy))
-}
-
-fn no_arg<H: CommandHandler + 'static>(names: &[&str], desc: &str, h: H) -> Command {
-    let names: Vec<String> = names.iter().map(|s| s.to_string()).collect();
-    Command::new(&names, desc).execute(h)
-}
-
-fn reg(ctx: &Context, command: Command, permission: &str) -> Result<(), String> {
-    ctx.register_command(command, permission);
-    Ok(())
-}
-
-fn has_level(sender: &CommandSender, level: CmdLevel) -> bool {
-    sender.has_permission_level(level)
-}
-
-fn uuid_of(p: &Player) -> String {
-    logic::uuid_string(host::key_of(p))
-}
-
-fn forward(p: &Player, distance: f64) -> (f64, f64, f64) {
-    let (x, y, z) = p.get_position();
-    let yaw = f64::from(p.get_yaw()).to_radians();
-    let pitch = f64::from(p.get_pitch()).to_radians();
-    (
-        x - yaw.sin() * distance * pitch.cos(),
-        y - pitch.sin() * distance,
-        z + yaw.cos() * distance * pitch.cos(),
-    )
-}
 
 fn block_pos(pos: (f64, f64, f64)) -> BlockPos {
     BlockPos { x: pos.0.floor() as i32, y: pos.1.floor() as i32, z: pos.2.floor() as i32 }
@@ -133,31 +73,22 @@ impl CommandHandler for EditSignCmd {
     }
 }
 
-// ---- movimiento y entornos --------------------------------------------------------
-
-struct JumpCmd;
-impl CommandHandler for JumpCmd {
-    fn handle(&self, sender: CommandSender, server: Server, _args: ConsumedArgs) -> CmdResult {
+struct StoneCutterCmd;
+impl CommandHandler for StoneCutterCmd {
+    fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         let p = player_of(&sender)?;
-        let (x, y, z) = forward(&p, 3.0);
-        let dest = crate::store::Location {
-            world: p.get_world().get_name(),
-            x: x.floor() + 0.5,
-            y: y + 1.0,
-            z: z.floor() + 0.5,
-            yaw: p.get_yaw(),
-            pitch: p.get_pitch(),
-        };
-        commands::start_teleport(&server, &p, dest, "salto".into(), TpKind::Jump);
+        p.open_gui(Gui::new(Screen::Stonecutter, TextComponent::text("Cortador de piedra")));
         Ok(1)
     }
 }
+
+// ---- entornos -------------------------------------------------------------------
 
 struct IceCmd;
 impl CommandHandler for IceCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let me = player_of(&sender)?;
-        let name = greedy(&args, "args").trim().to_string();
+        let name = greedy_arg(&args, "args").trim().to_string();
         let target = if name.is_empty() {
             me
         } else {
@@ -226,7 +157,7 @@ struct BurnCmd;
 impl CommandHandler for BurnCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-        let raw = greedy(&args, "args");
+        let raw = greedy_arg(&args, "args");
         let mut tokens = raw.split_whitespace();
         let name = tokens.next().ok_or_else(|| fail("Uso: /burn <jugador> <segundos>"))?;
         let secs = tokens.next().and_then(|s| s.parse::<i32>().ok()).unwrap_or(5).clamp(0, 300);
@@ -242,7 +173,7 @@ impl CommandHandler for LightningCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
         let me = player_of(&sender)?;
-        let name = greedy(&args, "args").trim().to_string();
+        let name = greedy_arg(&args, "args").trim().to_string();
         let (pos, label) = if name.is_empty() {
             (forward(&me, 5.0), "el objetivo".to_string())
         } else {
@@ -260,7 +191,7 @@ impl CommandHandler for ThunderCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
         let p = player_of(&sender)?;
-        let raw = greedy(&args, "args").trim().to_ascii_lowercase();
+        let raw = greedy_arg(&args, "args").trim().to_ascii_lowercase();
         let on = match raw.as_str() {
             "on" | "true" | "1" => true,
             "off" | "false" | "0" => false,
@@ -279,16 +210,16 @@ impl CommandHandler for NukeCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
         let p = player_of(&sender)?;
-        let label = format!("nuke:{}", greedy(&args, "args").trim().to_ascii_lowercase());
+        let label = format!("nuke:{}", greedy_arg(&args, "args").trim().to_ascii_lowercase());
         let confirmed = with_state(|s| environment::take_or_set(&mut s.pending_confirm, host::key_of(&p), &label))
             .ok_or_else(unavailable)?;
         if !confirmed {
             return Err(fail("Confirmación requerida: vuelve a ejecutar /nuke para confirmar."));
         }
-        let targets: Vec<Player> = if greedy(&args, "args").trim().is_empty() {
+        let targets: Vec<Player> = if greedy_arg(&args, "args").trim().is_empty() {
             server.get_all_players()
         } else {
-            greedy(&args, "args").split_whitespace().filter_map(|n| server.get_player_by_name(n)).collect()
+            greedy_arg(&args, "args").split_whitespace().filter_map(|n| server.get_player_by_name(n)).collect()
         };
         for target in targets {
             let (x, y, z) = target.get_position();
@@ -304,66 +235,11 @@ impl CommandHandler for NukeCmd {
     }
 }
 
-struct SuicideCmd;
-impl CommandHandler for SuicideCmd {
-    fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let name = p.get_name();
-        p.set_health(0.0);
-        _server.broadcast(&format!("{name} se ha quitado la vida."));
-        Ok(1)
-    }
-}
-
-struct ClearInventoryCmd;
-impl CommandHandler for ClearInventoryCmd {
-    fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
-        let me = player_of(&sender)?;
-        let me_uuid = uuid_of(&me);
-        let me_key = host::key_of(&me);
-        let name = greedy(&args, "args").trim().to_string();
-        let target = if name.is_empty() {
-            me
-        } else {
-            if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-            server.get_player_by_name(&name).ok_or_else(|| fail("Jugador no conectado."))?
-        };
-        let label = format!("clear:{}", uuid_of(&target));
-        let (needed, confirmed) = with_state(|s| {
-            let needed = environment::needs_confirmation(&s.persisted, &me_uuid);
-            let confirmed = environment::take_or_set(&mut s.pending_confirm, me_key, &label);
-            (needed, confirmed)
-        })
-        .ok_or_else(unavailable)?;
-        if needed && !confirmed {
-            return Err(fail("Confirma con /clearinventory otra vez (o usa /clearinventoryconfirmtoggle)."));
-        }
-        target.get_inventory().clear_all();
-        host::ok(&target, "Inventario vaciado.");
-        Ok(1)
-    }
-}
-
-struct ClearConfirmToggleCmd;
-impl CommandHandler for ClearConfirmToggleCmd {
-    fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let off = with_state(|s| {
-            let off = environment::toggle_confirmation(&mut s.persisted, &uuid_of(&p));
-            s.save_persisted();
-            off
-        })
-        .ok_or_else(unavailable)?;
-        host::ok(&p, if off { "Confirmación desactivada." } else { "Confirmación activada." });
-        Ok(1)
-    }
-}
-
 struct PlayerTimeCmd;
 impl CommandHandler for PlayerTimeCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let p = player_of(&sender)?;
-        let raw = greedy(&args, "args").trim().to_string();
+        let raw = greedy_arg(&args, "args").trim().to_string();
         let world = p.get_world();
         if raw.is_empty() || raw.eq_ignore_ascii_case("get") {
             say(&sender, &format!("Hora del mundo: {} ticks.", world.get_time_of_day()));
@@ -380,7 +256,7 @@ struct PlayerWeatherCmd;
 impl CommandHandler for PlayerWeatherCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let p = player_of(&sender)?;
-        let raw = greedy(&args, "args").trim().to_string();
+        let raw = greedy_arg(&args, "args").trim().to_string();
         if raw.is_empty() || raw.eq_ignore_ascii_case("get") {
             let current = p.get_player_weather().map_or("por defecto".into(), |w| format!("{w:?}"));
             say(&sender, &format!("Clima del jugador: {current}."));
@@ -396,7 +272,7 @@ impl CommandHandler for PlayerWeatherCmd {
     }
 }
 
-pub fn register_all(ctx: &Context) -> Result<(), String> {
+pub fn register(ctx: &Context) -> Result<(), String> {
     let perm = |node: &str, desc: &str, level: PermissionLevel| Permission {
         node: format!("pumpkin_essentials:{node}"),
         description: desc.into(),
@@ -415,9 +291,9 @@ pub fn register_all(ctx: &Context) -> Result<(), String> {
         ("workbench", "Abrir mesa de trabajo", zero),
         ("disposal", "Abrir basura", zero),
         ("editsign", "Editar carteles", zero),
-        ("jump", "Saltar al punto mirado", zero),
         ("ptime", "Ver/ajustar hora", zero),
         ("pweather", "Ver/ajustar clima", zero),
+        ("stonecutter", "Abrir cortador de piedra", zero),
         ("ice", "Congelar jugadores", two),
         ("tree", "Generar árbol", two),
         ("bigtree", "Generar árbol grande", two),
@@ -425,9 +301,6 @@ pub fn register_all(ctx: &Context) -> Result<(), String> {
         ("burn", "Prender fuego", two),
         ("lightning", "Invocar rayos", two),
         ("thunder", "Activar tormenta", two),
-        ("suicide", "Quitarse la vida", two),
-        ("clearinventory", "Vaciar inventarios", two),
-        ("clearinventoryconfirmtoggle", "Confirmación de inventario", two),
         ("nuke", "Bombardeo", three),
     ] {
         // PermissionLevel::Zero se traduce a Allow para mantener defaults legibles.
@@ -451,7 +324,7 @@ pub fn register_all(ctx: &Context) -> Result<(), String> {
     reg(ctx, no_arg(&["workbench"], "Abrir mesa de trabajo", GuiCmd { kind: GuiKind::Workbench }), "pumpkin_essentials:workbench")?;
     reg(ctx, no_arg(&["disposal"], "Abrir basura", GuiCmd { kind: GuiKind::Disposal }), "pumpkin_essentials:disposal")?;
     reg(ctx, no_arg(&["editsign"], "Editar cartel", EditSignCmd), "pumpkin_essentials:editsign")?;
-    reg(ctx, no_arg(&["jump"], "Saltar", JumpCmd), "pumpkin_essentials:jump")?;
+    reg(ctx, no_arg(&["stonecutter"], "Abrir cortador de piedra", StoneCutterCmd), "pumpkin_essentials:stonecutter")?;
     reg(ctx, Command::new(&["ice".to_string()], "Congelar").then(greedy_node("args").execute(IceCmd)), "pumpkin_essentials:ice")?;
     reg(ctx, no_arg(&["tree"], "Generar árbol", TreeCmd { big: false }), "pumpkin_essentials:tree")?;
     reg(ctx, no_arg(&["bigtree"], "Generar árbol grande", TreeCmd { big: true }), "pumpkin_essentials:bigtree")?;
@@ -460,9 +333,6 @@ pub fn register_all(ctx: &Context) -> Result<(), String> {
     reg(ctx, Command::new(&["lightning".to_string()], "Rayo").then(greedy_node("args").execute(LightningCmd)), "pumpkin_essentials:lightning")?;
     reg(ctx, Command::new(&["thunder".to_string()], "Tormenta").then(greedy_node("args").execute(ThunderCmd)), "pumpkin_essentials:thunder")?;
     reg(ctx, Command::new(&["nuke".to_string()], "Bombardeo").then(greedy_node("args").execute(NukeCmd)), "pumpkin_essentials:nuke")?;
-    reg(ctx, no_arg(&["suicide"], "Quitarse la vida", SuicideCmd), "pumpkin_essentials:suicide")?;
-    reg(ctx, Command::new(&["clearinventory".to_string()], "Vaciar inventario").then(greedy_node("args").execute(ClearInventoryCmd)), "pumpkin_essentials:clearinventory")?;
-    reg(ctx, no_arg(&["clearinventoryconfirmtoggle"], "Confirmación de inventario", ClearConfirmToggleCmd), "pumpkin_essentials:clearinventoryconfirmtoggle")?;
     reg(ctx, Command::new(&["ptime".to_string()], "Hora").then(greedy_node("args").execute(PlayerTimeCmd)), "pumpkin_essentials:ptime")?;
     reg(ctx, Command::new(&["pweather".to_string()], "Clima").then(greedy_node("args").execute(PlayerWeatherCmd)), "pumpkin_essentials:pweather")?;
     Ok(())

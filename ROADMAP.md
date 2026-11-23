@@ -12,7 +12,7 @@ Objetivo: cubrir los **153 comandos** declarados en `EssentialsX/Essentials` 2.x
 
 ## Estado actual
 
-**Implementados en EssentialsFusion (144):** afk, anvil, antioch, back, bal, balance, balancetop, backup, beezooka, bigtree, book, bottom, break, broadcastworld, burn, cartographytable, clearinventory, clearinventoryconfirmtoggle, compass, condense, createkit, customtext, delhome, deljail, delkit, delwarp, depth, disposal, eco, editsign, enderchest, essentials, exp, ext, feed, fireball, firework, fly, flyspeed, gc, getpos, gm, gma, gmc, gms, gmsp, god, grindstone, hat, heal, helpop, home, homes, ice, ignore, info, invsee, item, itemdb, itemlore, itemname, jail, jailedplayers, jails, jump, kittycannon, kit, kitreset, lightning, listhomes, loom, mail, more, msgtoggle, near, nick, nuke, pay, payconfirm, payconfirmtoggle, paytoggle, ping, playtime, potion, powertool, powertoollist, powertooltoggle, ptime, pweather, r, realname, remove, renamehome, repair, rest, rtoggle, rules, sell, sethome, sethomelimit, setjail, setspawn, settpr, setwarp, setworth, showkit, skull, smithingtable, socialspy, spawn, spawnmob, spawner, speed, seen, stonecutter, suicide, sudo, tempban, thunder, togglejail, top, tpa, tpaall, tpacancel, tpahere, tpall, tpauto, tpaccept, tphere, tptoggle, tpdeny, tpo, tpoffline, tpohere, tpr, tppos, tree, unlimited, unmute, vanish, warp, warps, workbench, worth, whois, world.
+**Implementados en EssentialsFusion (149):** afk, anvil, antioch, back, bal, balance, balancetop, backup, beezooka, bigtree, book, bottom, break, broadcastworld, burn, cartographytable, clearinventory, clearinventoryconfirmtoggle, compass, condense, createkit, customtext, delhome, deljail, delkit, delwarp, depth, disposal, eco, editsign, enderchest, essentials, exp, ext, feed, fireball, firework, fly, flyspeed, gc, getpos, gm, gma, gmc, gms, gmsp, god, grindstone, hat, heal, helpop, home, homes, ice, ignore, info, invsee, item, itemdb, itemlore, itemname, jail, jailedplayers, jails, jump, kittycannon, kit, kitreset, lightning, listhomes, loom, mail, more, msgtoggle, near, nick, nuke, pay, payconfirm, payconfirmtoggle, paytoggle, ping, playtime, potion, powertool, powertoollist, powertooltoggle, ptime, pweather, r, realname, remove, renamehome, repair, rest, rtoggle, rules, sell, sethome, sethomelimit, setjail, setspawn, settpr, setwarp, setworth, showkit, skull, smithingtable, socialspy, spawn, spawnmob, spawner, speed, seen, stonecutter, suicide, sudo, tempban, thunder, togglejail, top, tpa, tpaall, tpacancel, tpahere, tpall, tpauto, tpaccept, tphere, tptoggle, tpdeny, tpo, tpoffline, tpohere, tpr, tppos, tree, unlimited, unmute, vanish, warp, warps, workbench, worth, whois, world.
 
 **Cubiertos por el núcleo u otros plugins:** ban, banip, broadcast, enchant, give, help, kick, kill, list, me, motd, msg, recipe, time, tp, unban, unbanip, weather (núcleo/PumpChat/dMOTD), más gamemode (núcleo).
 
@@ -52,15 +52,26 @@ Checkpoint verificado por Main: 61 tests, build WASM OK, prueba aislada con los 
 
 ### Iteración 9 — Auditoría final y cierre de huecos — **COMPLETADA**
 
-Auditoría de los 153 comandos oficiales de EssentialsX 2.x documentada en `COMPAT.md`: 88 IMPLEMENTADO, 19 CUBIERTO (núcleo/PumpChat/dMOTD), 43 LIMITADO (razón técnica concreta) y 3 AÑADIDO AHORA: `stonecutter`, `firework`, `jails`. Total de nombres registrados por EssentialsFusion: 144.
+Auditoría de los 153 comandos oficiales de EssentialsX 2.x documentada en `COMPAT.md`: 88 IMPLEMENTADO, 19 CUBIERTO (núcleo/PumpChat/dMOTD), 43 LIMITADO (razón técnica concreta) y 3 AÑADIDO AHORA: `stonecutter`, `firework`, `jails`. Total de nombres registrados por EssentialsFusion: 149.
 
 Checkpoint interno: `cargo test --lib` y build WASM OK; esquemas de datos anteriores intactos. Pendiente de verificación aislada/real por Main.
 ## Estado final
 
 Roadmap de paridad cerrado con inventario completo y huecos viables cubiertos. El plugin no duplica comandos del núcleo ni de otros plugins del servidor.
 
+## Refactor estructural (post-iteración 9)
+
+Se aplicó el refactor de estructura sin cambiar funcionalidad:
+
+- `git init` + `.gitignore` y commit baseline antes de empezar.
+- `src/cmdutil.rs` unifica los helpers de la capa de comandos.
+- `src/commands/` divide los 149 nombres de comando en 13 módulos por dominio.
+- `src/store/persist.rs` añade el trait `FileStore` y `state.json` pasa a guardarse solo con dirty-flag.
+- `src/host/host_traits.rs` introduce un Adapter mínimo sobre la API WIT sin cambiar la API pública.
+- Verificación: `cargo check --target wasm32-wasip2` (0 errores/0 warnings), `cargo test --lib` (62/62) y `cargo build --release --target wasm32-wasip2` OK.
+
 ## Checkpoint de cada iteración
 
-- `cargo test --lib` + `cargo build --release --target wasm32-wasip2`.
+- `cargo test --lib` + `cargo check --target wasm32-wasip2` + `cargo build --release --target wasm32-wasip2`.
 - Prueba en instancia aislada: arranque sin errores y cada comando nuevo reconocido.
 - Instalación con backup de la versión anterior, `/lp` si hay nodos nuevos, reinicio y verificación en `logs/latest.log`.

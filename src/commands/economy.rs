@@ -1,61 +1,19 @@
-//! Iteración 6: economía integrada (ledger propio, semántica EssentialsX adaptada).
+//! Economía: /balance, /bal, /balancetop, /eco, /pay, /payconfirm,
+//! /paytoggle, /payconfirmtoggle, /sell, /worth y /setworth.
 
 use crate::{
+    cmdutil::{fail, greedy_arg, greedy_node, player_of, reg, say, unavailable, uuid_of, word, CmdResult},
     economy::{self, PendingPay},
     host::{self, with_state},
-    logic,
 };
 use pumpkin_plugin_api::{
-    command::{Arg, ArgumentType, CommandError, CommandNode, CommandSender, ConsumedArgs, StringType},
+    command::{CommandError, CommandSender, ConsumedArgs},
     commands::{Command, CommandHandler},
     permission::{Permission, PermissionDefault, PermissionLevel},
-    text::TextComponent,
     wit::pumpkin::plugin::command::PermissionLevel as CmdLevel,
-    Context, Player, Server,
+    Context, Server,
 };
 use tracing::info;
-
-type CmdResult = Result<i32, CommandError>;
-
-fn fail(msg: &str) -> CommandError {
-    CommandError::CommandFailed(TextComponent::text(msg))
-}
-
-fn unavailable() -> CommandError {
-    fail("Economía no disponible.")
-}
-
-fn plain(arg: Arg) -> String {
-    match arg {
-        Arg::Simple(s) | Arg::Msg(s) => s,
-        _ => String::new(),
-    }
-}
-
-fn greedy(args: &ConsumedArgs, name: &str) -> String {
-    plain(args.get_value(name))
-}
-
-fn player_of(sender: &CommandSender) -> Result<Player, CommandError> {
-    sender.as_player().ok_or_else(|| fail("Solo jugadores."))
-}
-
-fn say(sender: &CommandSender, msg: &str) {
-    sender.send_message(TextComponent::text(msg));
-}
-
-fn word(name: &str) -> CommandNode {
-    CommandNode::argument(name, &ArgumentType::String(StringType::SingleWord))
-}
-
-fn greedy_node(name: &str) -> CommandNode {
-    CommandNode::argument(name, &ArgumentType::String(StringType::Greedy))
-}
-
-fn reg(ctx: &Context, command: Command, permission: &str) -> Result<(), String> {
-    ctx.register_command(command, permission);
-    Ok(())
-}
 
 fn money(cents: i64) -> String {
     with_state(|s| economy::format_money(cents, &s.cfg.currency_symbol, s.cfg.currency_decimals))
@@ -66,10 +24,6 @@ fn parse_amount(raw: &str) -> Result<i64, CommandError> {
     with_state(|s| economy::parse_money(raw, s.cfg.currency_decimals))
         .ok_or_else(unavailable)?
         .map_err(|e| fail(&e))
-}
-
-fn uuid_of(p: &Player) -> String {
-    logic::uuid_string(host::key_of(p))
 }
 
 fn uuid_by_name(server: &Server, name: &str) -> Option<String> {
@@ -90,6 +44,10 @@ fn display_name(server: &Server, uuid: &str) -> String {
     with_state(|s| s.persisted.names.get(uuid).cloned()).flatten().unwrap_or_else(|| uuid.to_string())
 }
 
+fn economy_balance(uuid: &str) -> i64 {
+    with_state(|s| economy::balance_of(&s.economy, uuid)).unwrap_or(0)
+}
+
 struct BalanceCmd {
     target: bool,
 }
@@ -97,7 +55,7 @@ impl CommandHandler for BalanceCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let me = player_of(&sender)?;
         let (uuid, label) = if self.target {
-            let name = plain(args.get_value("player"));
+            let name = crate::cmdutil::plain(args.get_value("player"));
             let u = uuid_by_name(&server, &name).ok_or_else(|| fail("Jugador desconocido."))?;
             (u.clone(), display_name(&server, &u))
         } else {
@@ -112,7 +70,7 @@ impl CommandHandler for BalanceCmd {
 struct BalanceTopCmd;
 impl CommandHandler for BalanceTopCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
-        let page: usize = greedy(&args, "args").trim().parse().unwrap_or(1).max(1);
+        let page: usize = greedy_arg(&args, "args").trim().parse().unwrap_or(1).max(1);
         let mut rows = with_state(|s| s.economy.balances.iter().map(|(u, v)| (u.clone(), *v)).collect::<Vec<_>>())
             .ok_or_else(unavailable)?;
         rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
@@ -136,7 +94,7 @@ impl CommandHandler for EcoCmd {
         if !sender.has_permission_level(CmdLevel::Three) {
             return Err(CommandError::PermissionDenied);
         }
-        let raw = greedy(&args, "args");
+        let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.len() < 3 {
             return Err(fail("Uso: /eco <set|add|take|reset> <jugador> <cantidad>"));
@@ -166,15 +124,11 @@ impl CommandHandler for EcoCmd {
     }
 }
 
-fn economy_balance(uuid: &str) -> i64 {
-    with_state(|s| economy::balance_of(&s.economy, uuid)).unwrap_or(0)
-}
-
 struct PayCmd;
 impl CommandHandler for PayCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let p = player_of(&sender)?;
-        let raw = greedy(&args, "args");
+        let raw = greedy_arg(&args, "args");
         let mut tokens = raw.split_whitespace();
         let name = tokens.next().ok_or_else(|| fail("Uso: /pay <jugador> <cantidad>"))?;
         let amount_raw = tokens.next().ok_or_else(|| fail("Uso: /pay <jugador> <cantidad>"))?;
@@ -253,7 +207,7 @@ struct PayToggleCmd;
 impl CommandHandler for PayToggleCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let me = player_of(&sender)?;
-        let raw = greedy(&args, "args").trim().to_string();
+        let raw = greedy_arg(&args, "args").trim().to_string();
         let (uuid, label) = if raw.is_empty() {
             (uuid_of(&me), me.get_name())
         } else {
@@ -297,7 +251,7 @@ struct SellCmd;
 impl CommandHandler for SellCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let p = player_of(&sender)?;
-        let filter = greedy(&args, "args").trim().to_ascii_lowercase();
+        let filter = greedy_arg(&args, "args").trim().to_ascii_lowercase();
         let pinv = p.get_inventory();
         let inv = pinv.as_inventory();
         let size = inv.get_size();
@@ -342,7 +296,7 @@ impl CommandHandler for SellCmd {
 struct WorthCmd;
 impl CommandHandler for WorthCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let raw = greedy(&args, "args");
+        let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.len() < 2 {
             return Err(fail("Uso: /worth <cantidad> <ítem> (p. ej. /worth 32 minecraft:stone)"));
@@ -361,7 +315,7 @@ impl CommandHandler for SetWorthCmd {
         if !sender.has_permission_level(CmdLevel::Three) {
             return Err(CommandError::PermissionDenied);
         }
-        let raw = greedy(&args, "args");
+        let raw = greedy_arg(&args, "args");
         let mut tokens = raw.split_whitespace();
         let key = economy::normalize_item_key(tokens.next().ok_or_else(|| fail("Uso: /setworth <ítem> <precio>"))?);
         let price = parse_amount(tokens.next().ok_or_else(|| fail("Uso: /setworth <ítem> <precio>"))?)?;
@@ -375,7 +329,7 @@ impl CommandHandler for SetWorthCmd {
     }
 }
 
-pub fn register_all(ctx: &Context) -> Result<(), String> {
+pub fn register(ctx: &Context) -> Result<(), String> {
     let allow = |node: &str, desc: &str| Permission {
         node: format!("pumpkin_essentials:{node}"),
         description: desc.into(),
@@ -403,16 +357,64 @@ pub fn register_all(ctx: &Context) -> Result<(), String> {
         })?;
     }
 
-    reg(ctx, Command::new(&["balance".to_string()], "Ver saldo").execute(BalanceCmd { target: false }).then(word("player").execute(BalanceCmd { target: true })), "pumpkin_essentials:balance")?;
-    reg(ctx, Command::new(&["bal".to_string()], "Ver saldo").execute(BalanceCmd { target: false }).then(word("player").execute(BalanceCmd { target: true })), "pumpkin_essentials:balance")?;
-    reg(ctx, Command::new(&["balancetop".to_string()], "Ranking de saldos").then(greedy_node("args").execute(BalanceTopCmd)), "pumpkin_essentials:balancetop")?;
-    reg(ctx, Command::new(&["eco".to_string()], "Administrar economía").then(greedy_node("args").execute(EcoCmd)), "pumpkin_essentials:eco")?;
-    reg(ctx, Command::new(&["pay".to_string()], "Pagar").then(greedy_node("args").execute(PayCmd)), "pumpkin_essentials:pay")?;
-    reg(ctx, Command::new(&["paytoggle".to_string()], "Aceptar pagos").then(greedy_node("args").execute(PayToggleCmd)), "pumpkin_essentials:paytoggle")?;
-    reg(ctx, Command::new(&["payconfirmtoggle".to_string()], "Confirmación de pagos").execute(PayConfirmToggleCmd), "pumpkin_essentials:payconfirmtoggle")?;
-    reg(ctx, Command::new(&["payconfirm".to_string()], "Confirmar pago").execute(PayConfirmCmd), "pumpkin_essentials:payconfirm")?;
-    reg(ctx, Command::new(&["sell".to_string()], "Vender objetos").then(greedy_node("args").execute(SellCmd)), "pumpkin_essentials:sell")?;
-    reg(ctx, Command::new(&["worth".to_string()], "Valor de un objeto").then(greedy_node("args").execute(WorthCmd)), "pumpkin_essentials:worth")?;
-    reg(ctx, Command::new(&["setworth".to_string()], "Fijar precio").then(greedy_node("args").execute(SetWorthCmd)), "pumpkin_essentials:setworth")?;
+    reg(
+        ctx,
+        Command::new(&["balance".to_string()], "Ver saldo")
+            .execute(BalanceCmd { target: false })
+            .then(word("player").execute(BalanceCmd { target: true })),
+        "pumpkin_essentials:balance",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["bal".to_string()], "Ver saldo")
+            .execute(BalanceCmd { target: false })
+            .then(word("player").execute(BalanceCmd { target: true })),
+        "pumpkin_essentials:balance",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["balancetop".to_string()], "Ranking de saldos").then(greedy_node("args").execute(BalanceTopCmd)),
+        "pumpkin_essentials:balancetop",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["eco".to_string()], "Administrar economía").then(greedy_node("args").execute(EcoCmd)),
+        "pumpkin_essentials:eco",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["pay".to_string()], "Pagar").then(greedy_node("args").execute(PayCmd)),
+        "pumpkin_essentials:pay",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["paytoggle".to_string()], "Aceptar pagos").then(greedy_node("args").execute(PayToggleCmd)),
+        "pumpkin_essentials:paytoggle",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["payconfirmtoggle".to_string()], "Confirmación de pagos").execute(PayConfirmToggleCmd),
+        "pumpkin_essentials:payconfirmtoggle",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["payconfirm".to_string()], "Confirmar pago").execute(PayConfirmCmd),
+        "pumpkin_essentials:payconfirm",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["sell".to_string()], "Vender objetos").then(greedy_node("args").execute(SellCmd)),
+        "pumpkin_essentials:sell",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["worth".to_string()], "Valor de un objeto").then(greedy_node("args").execute(WorthCmd)),
+        "pumpkin_essentials:worth",
+    )?;
+    reg(
+        ctx,
+        Command::new(&["setworth".to_string()], "Fijar precio").then(greedy_node("args").execute(SetWorthCmd)),
+        "pumpkin_essentials:setworth",
+    )?;
     Ok(())
 }

@@ -1,13 +1,14 @@
 //! Session metadata persisted in `state.json` inside the plugin data folder.
 //!
-//! `load_state` is intentionally read-only: legacy shapes are normalised in
-//! memory and a `needs_migration` flag is set. The periodic tick writes the
-//! canonical file later, so loading can never block on file I/O.
+//! `PersistedState` implements the shared [`FileStore`] pattern
+//! (`crate::store::persist`): loading is read-only, legacy shapes are
+//! normalised in memory (flagged via `needs_migration`) and the canonical
+//! file is written later by the periodic tick, so loading never blocks on
+//! file I/O.
 
-use crate::store::{self, Location};
+use crate::store::{Location, persist::FileStore};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::BTreeMap, fs, io, path::Path};
+use std::{collections::BTreeMap, io, path::Path};
 
 fn schema() -> u32 {
     2
@@ -93,6 +94,18 @@ pub struct PersistedState {
     /// Set by `load_state` when a legacy shape was normalised; never serialised.
     #[serde(skip)]
     pub needs_migration: bool,
+    /// Dirty: the in-memory state changed since the last write of
+    /// `state.json`, so the periodic tick should save it. What counts as
+    /// dirty:
+    ///
+    /// * the tick's playtime accounting — the only tick-driven mutation and
+    ///   the only writer that sets this flag;
+    /// * nothing else: every command/event that mutates other fields calls
+    ///   `save_persisted()` immediately and never relies on this flag.
+    ///
+    /// Never serialised; resets on every load.
+    #[serde(skip)]
+    pub dirty: bool,
 }
 
 impl Default for PersistedState {
@@ -122,52 +135,44 @@ impl Default for PersistedState {
             jailed: BTreeMap::new(),
             clear_confirm_off: BTreeMap::new(),
             needs_migration: false,
+            dirty: false,
         }
     }
 }
 
-/// A wrapper file (`{"state": {...}}`) is accepted without any disk write.
-fn unwrap_wrapper(value: &mut Value) -> bool {
-    let Some(map) = value.as_object() else {
-        return false;
-    };
-    if map.len() != 1 {
-        return false;
+impl FileStore for PersistedState {
+    const WRAPPER_KEY: &'static str = "state";
+
+    fn canonical_schema() -> u32 {
+        schema()
     }
-    let Some(inner) = map.get("state").cloned() else {
-        return false;
-    };
-    *value = inner;
-    true
+    fn stored_schema(&self) -> u32 {
+        self.schema
+    }
+    fn bump_schema(&mut self) {
+        self.schema = schema();
+    }
+    fn needs_migration(&self) -> bool {
+        self.needs_migration
+    }
+    fn set_needs_migration(&mut self, needs: bool) {
+        self.needs_migration = needs;
+    }
 }
 
 /// Read and parse `state.json`. Never writes: migration is deferred to the tick.
 pub fn load_state(path: &Path) -> Result<PersistedState, String> {
-    let text = match fs::read_to_string(path) {
-        Ok(text) if text.trim().is_empty() => return Ok(PersistedState::default()),
-        Ok(text) => text,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(PersistedState::default()),
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
-    let mut value: Value = serde_json::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    let legacy = unwrap_wrapper(&mut value);
-    let mut state: PersistedState =
-        serde_json::from_value(value).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    let old_schema = state.schema < schema();
-    if old_schema {
-        state.schema = schema();
-    }
-    state.needs_migration = legacy || old_schema;
-    Ok(state)
+    PersistedState::load(path)
 }
 
 pub fn save_state(path: &Path, state: &PersistedState) -> io::Result<()> {
-    store::save_json(path, state)
+    PersistedState::save_atomic(path, state)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::PathBuf;
 
     fn tmpdir(tag: &str) -> PathBuf {
@@ -254,6 +259,17 @@ mod tests {
         let after = load_state(&p).unwrap();
         assert_eq!(after.schema, schema());
         assert!(!after.needs_migration);
+        let _ = fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn dirty_flag_never_reaches_disk() {
+        let d = tmpdir("dirty");
+        let p = d.join("state.json");
+        let mut s = PersistedState::default();
+        s.dirty = true;
+        save_state(&p, &s).unwrap();
+        assert!(!load_state(&p).unwrap().dirty);
         let _ = fs::remove_dir_all(d);
     }
 }

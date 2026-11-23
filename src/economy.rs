@@ -1,13 +1,14 @@
 //! Economía propia persistida en `economy.json` (sustituye a Vault/PVault en Pumpkin).
 //!
-//! Los importes se guardan como enteros en céntavos para evitar errores de coma
-//! flotante. `load_economy` solo lee: normaliza formatos antiguos en memoria y
-//! marca `needs_migration`; el tick escribe la forma canónica más tarde.
+//! Los importes se guardan como enteros en céntimos para evitar errores de coma
+//! flotante. `Economy` implementa el patrón compartido [`FileStore`]
+//! (`crate::store::persist`): `load_economy` solo lee, normaliza formatos
+//! antiguos en memoria (marcando `needs_migration`) y el tick escribe la forma
+//! canónica más tarde.
 
-use crate::store::{self};
+use crate::store::persist::FileStore;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::BTreeMap, fs, io, path::Path};
+use std::{collections::BTreeMap, io, path::Path};
 
 fn schema() -> u32 {
     1
@@ -127,40 +128,39 @@ pub fn worth_of(economy: &Economy, key: &str) -> i64 {
     economy.worth.get(&normalize_item_key(key)).copied().unwrap_or(0).max(0)
 }
 
-fn unwrap_wrapper(value: &mut Value) -> bool {
-    let Some(map) = value.as_object() else { return false };
-    if map.len() != 1 { return false; }
-    let Some(inner) = map.get("economy").cloned() else { return false; };
-    *value = inner;
-    true
+impl FileStore for Economy {
+    const WRAPPER_KEY: &'static str = "economy";
+
+    fn canonical_schema() -> u32 {
+        schema()
+    }
+    fn stored_schema(&self) -> u32 {
+        self.schema
+    }
+    fn bump_schema(&mut self) {
+        self.schema = schema();
+    }
+    fn needs_migration(&self) -> bool {
+        self.needs_migration
+    }
+    fn set_needs_migration(&mut self, needs: bool) {
+        self.needs_migration = needs;
+    }
 }
 
 /// Read-only load; migration is deferred to the periodic tick.
 pub fn load_economy(path: &Path) -> Result<Economy, String> {
-    let text = match fs::read_to_string(path) {
-        Ok(text) if text.trim().is_empty() => return Ok(Economy::default()),
-        Ok(text) => text,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Economy::default()),
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
-    let mut value: Value = serde_json::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    let legacy = unwrap_wrapper(&mut value);
-    let mut economy: Economy = serde_json::from_value(value).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    let old_schema = economy.schema < schema();
-    if old_schema {
-        economy.schema = schema();
-    }
-    economy.needs_migration = legacy || old_schema;
-    Ok(economy)
+    Economy::load(path)
 }
 
 pub fn save_economy(path: &Path, economy: &Economy) -> io::Result<()> {
-    store::save_json(path, economy)
+    Economy::save_atomic(path, economy)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::PathBuf;
 
     fn tmpdir(tag: &str) -> PathBuf {
