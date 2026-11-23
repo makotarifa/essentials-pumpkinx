@@ -81,9 +81,9 @@ pub struct WarpsFile {
 pub fn load_json<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
     match fs::read_to_string(path) {
         Ok(text) if text.trim().is_empty() => Ok(T::default()),
-        Ok(text) => serde_json::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display())),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(T::default()),
-        Err(e) => Err(format!("read {}: {e}", path.display())),
+        Ok(text) => serde_json::from_str(&text).map_err(|error| format!("parse {}: {error}", path.display())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(T::default()),
+        Err(error) => Err(format!("read {}: {error}", path.display())),
     }
 }
 
@@ -107,11 +107,9 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
             fs::remove_file(path)?;
             fs::rename(&tmp, path)
         }
-        Err(e) => Err(e),
+        Err(error) => Err(error),
     }
 }
-
-// ---- migration ----------------------------------------------------------------
 
 fn take_field(obj: &mut Map<String, Value>, names: &[&str]) -> Option<Value> {
     for name in names {
@@ -235,9 +233,9 @@ fn read_value(path: &Path) -> Result<Option<Value>, String> {
         Ok(text) if text.trim().is_empty() => Ok(None),
         Ok(text) => serde_json::from_str(&text)
             .map(Some)
-            .map_err(|e| format!("parse {}: {e}", path.display())),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("read {}: {e}", path.display())),
+            .map_err(|error| format!("parse {}: {error}", path.display())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("read {}: {error}", path.display())),
     }
 }
 
@@ -248,11 +246,11 @@ pub fn load_homes(path: &Path) -> Result<HomesFile, String> {
     };
     if normalise_homes(&mut value) {
         let migrated: HomesFile =
-            serde_json::from_value(value).map_err(|e| format!("migrate {}: {e}", path.display()))?;
-        save_json(path, &migrated).map_err(|e| format!("save migrated {}: {e}", path.display()))?;
+            serde_json::from_value(value).map_err(|error| format!("migrate {}: {error}", path.display()))?;
+        save_json(path, &migrated).map_err(|error| format!("save migrated {}: {error}", path.display()))?;
         Ok(migrated)
     } else {
-        serde_json::from_value(value).map_err(|e| format!("parse {}: {e}", path.display()))
+        serde_json::from_value(value).map_err(|error| format!("parse {}: {error}", path.display()))
     }
 }
 
@@ -263,11 +261,11 @@ pub fn load_warps(path: &Path) -> Result<WarpsFile, String> {
     };
     if normalise_warps(&mut value) {
         let migrated: WarpsFile =
-            serde_json::from_value(value).map_err(|e| format!("migrate {}: {e}", path.display()))?;
-        save_json(path, &migrated).map_err(|e| format!("save migrated {}: {e}", path.display()))?;
+            serde_json::from_value(value).map_err(|error| format!("migrate {}: {error}", path.display()))?;
+        save_json(path, &migrated).map_err(|error| format!("save migrated {}: {error}", path.display()))?;
         Ok(migrated)
     } else {
-        serde_json::from_value(value).map_err(|e| format!("parse {}: {e}", path.display()))
+        serde_json::from_value(value).map_err(|error| format!("parse {}: {error}", path.display()))
     }
 }
 
@@ -281,10 +279,10 @@ mod tests {
     }
 
     fn tmpdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("fusion-ess-test-{tag}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        fs::create_dir_all(&d).unwrap();
-        d
+        let dir = std::env::temp_dir().join(format!("pumpkinx-store-test-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     #[test]

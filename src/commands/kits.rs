@@ -1,5 +1,3 @@
-//! Kits: /kit, /createkit, /delkit, /kitreset y /showkit.
-
 use crate::{
     cmdutil::{fail, give_stack, greedy_arg, greedy_node, has_level, player_of, reg, say, unavailable, uuid_of, word, CmdResult},
     host::{self, with_state},

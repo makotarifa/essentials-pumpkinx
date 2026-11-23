@@ -1,6 +1,3 @@
-//! Chat y mensajería: /broadcastworld, /msgtoggle, /socialspy, /ignore,
-//! /nick, /realname, /mail, /r, /rtoggle, /helpop, /customtext y /rules.
-
 use crate::{
     cmdutil::{
         fail, greedy_arg, greedy_cmd, has_level, no_arg, one_arg, parse_mode_arg, player_of, reg, say, target_from_name,
@@ -37,15 +34,15 @@ impl CommandHandler for BroadcastWorldCmd {
         let (world_name, body) = if tokens.len() > 1 && server.has_world(tokens[0]) {
             (tokens[0].to_string(), tokens[1..].join(" "))
         } else {
-            let Some(p) = player else { return Err(fail("Indica el mundo: /broadcastworld <mundo> <mensaje>")); };
-            (p.get_world().get_name(), tokens.join(" "))
+            let Some(player) = player else { return Err(fail("Indica el mundo: /broadcastworld <mundo> <mensaje>")); };
+            (player.get_world().get_name(), tokens.join(" "))
         };
         let Some(world) = server.get_world_by_name(&world_name) else {
             return Err(fail(&format!("Mundo '{world_name}' no existe.")));
         };
         let from = sender.get_name();
-        for p in server.get_players_in_world(world) {
-            p.send_system_message(TextComponent::text(&format!("[Mundo {world_name}] <{from}> {body}")), false);
+        for player in server.get_players_in_world(world) {
+            player.send_system_message(TextComponent::text(&format!("[Mundo {world_name}] <{from}> {body}")), false);
         }
         Ok(1)
     }
@@ -134,7 +131,7 @@ impl CommandHandler for IgnoreCmd {
             }
         })
         .ok_or_else(unavailable)?;
-        with_state(|s| s.save_persisted());
+        with_state(|state| state.save_persisted());
         say(&sender, &format!("{name} {}.", if now_ignored { "ignorado" } else { "dejado de ignorar" }));
         Ok(1)
     }
@@ -166,7 +163,7 @@ impl CommandHandler for NickCmd {
             s.save_persisted();
         })
         .ok_or_else(unavailable)?;
-        let afk = with_state(|s| s.afks.is_afk(host::key_of(&target))).unwrap_or(false);
+        let afk = with_state(|state| state.afks.is_afk(host::key_of(&target))).unwrap_or(false);
         events::apply_display_name(&target, nick.as_deref(), afk);
         say(&sender, &format!("Apodo de {}: {}.", target.get_name(), if clearing { "eliminado".into() } else { nick_raw }));
         Ok(1)
@@ -201,7 +198,7 @@ impl CommandHandler for MailCmd {
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         match tokens.first().copied() {
             None | Some("read") => {
-                let mails = with_state(|s| s.persisted.mail.get(&uuid).cloned()).ok_or_else(unavailable)?.unwrap_or_default();
+                let mails = with_state(|state| state.persisted.mail.get(&uuid).cloned()).ok_or_else(unavailable)?.unwrap_or_default();
                 if mails.is_empty() {
                     return Err(fail("No tienes correos."));
                 }
@@ -216,7 +213,7 @@ impl CommandHandler for MailCmd {
                 });
             }
             Some("clear") => {
-                with_state(|s| { s.persisted.mail.remove(&uuid); s.save_persisted(); }).ok_or_else(unavailable)?;
+                with_state(|state| { state.persisted.mail.remove(&uuid); state.save_persisted(); }).ok_or_else(unavailable)?;
                 say(&sender, "Correos borrados.");
             }
             Some(target) => {
@@ -231,7 +228,7 @@ impl CommandHandler for MailCmd {
                         time_ms: host::now_ms(), read: false,
                     };
                     s.persisted.mail.entry(to_uuid.clone()).or_default().push(msg);
-                    // El destinatario podrá responder con /r.
+                    // The recipient will be able to reply with /r.
                     s.persisted.reply_target.insert(to_uuid, uuid.clone());
                     s.save_persisted();
                 })
@@ -252,7 +249,7 @@ impl CommandHandler for ReplyCmd {
         if body.is_empty() {
             return Err(fail("Uso: /r <mensaje>"));
         }
-        let target_uuid = with_state(|s| s.persisted.reply_target.get(&uuid).cloned()).ok_or_else(unavailable)?
+        let target_uuid = with_state(|state| state.persisted.reply_target.get(&uuid).cloned()).ok_or_else(unavailable)?
             .ok_or_else(|| fail("No tienes a quién responder."))?;
         let (ignored, blocked, spy) = with_state(|s| {
             let ignored = s.persisted.ignored.get(&target_uuid).is_some_and(|l| l.contains(&uuid));
@@ -266,17 +263,17 @@ impl CommandHandler for ReplyCmd {
             return Err(fail("Ese jugador no acepta respuestas ahora."));
         }
         let target = player_by_uuid_string(&_server, &target_uuid);
-        let target_name = target.as_ref().map_or_else(|| "(desconectado)".to_string(), |p| p.get_name());
+        let target_name = target.as_ref().map_or_else(|| "(desconectado)".to_string(), |player| player.get_name());
         let text = format!("{} -> {}: {}", me.get_name(), target_name, body);
-        if let Some(p) = &target {
-            p.send_system_message(TextComponent::text(&text), false);
+        if let Some(player) = &target {
+            player.send_system_message(TextComponent::text(&text), false);
         }
         for id in spy {
-            if let Some(p) = player_by_uuid_string(&_server, &id) {
-                p.send_system_message(TextComponent::text(&format!("[SocialSpy] {text}")), false);
+            if let Some(player) = player_by_uuid_string(&_server, &id) {
+                player.send_system_message(TextComponent::text(&format!("[SocialSpy] {text}")), false);
             }
         }
-        with_state(|s| { s.persisted.reply_target.insert(target_uuid, uuid); s.save_persisted(); });
+        with_state(|state| { state.persisted.reply_target.insert(target_uuid, uuid); state.save_persisted(); });
         say(&sender, &format!("Respuesta enviada: {body}"));
         Ok(1)
     }
@@ -316,9 +313,9 @@ impl CommandHandler for HelpOpCmd {
         }
         let from = sender.get_name();
         let mut count = 0;
-        for p in server.get_all_players() {
-            if p.has_permission("pumpkin_essentials:helpop.receive") {
-                p.send_system_message(TextComponent::text(&format!("[HelpOp] <{from}> {body}")), false);
+        for player in server.get_all_players() {
+            if player.has_permission("pumpkin_essentials:helpop.receive") {
+                player.send_system_message(TextComponent::text(&format!("[HelpOp] <{from}> {body}")), false);
                 count += 1;
             }
         }
@@ -348,7 +345,7 @@ impl CommandHandler for CustomTextCmd {
 struct RulesCmd;
 impl CommandHandler for RulesCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let rules = with_state(|s| s.cfg.rules.clone()).ok_or_else(unavailable)?;
+        let rules = with_state(|state| state.cfg.rules.clone()).ok_or_else(unavailable)?;
         say(&sender, "--- Reglas ---");
         for (i, rule) in rules.iter().enumerate() { say(&sender, &format!("{}. {}", i + 1, rule)); }
         Ok(1)

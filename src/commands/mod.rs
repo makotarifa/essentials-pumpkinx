@@ -54,62 +54,60 @@ pub fn register_all(ctx: &Context) -> Result<(), String> {
     Ok(())
 }
 
-// ---- teleport glue -----------------------------------------------------------
-
 /// Do the teleport now: record /back, move, notify, start the /home cooldown.
-pub fn complete_teleport(server: &Server, p: &Player, key: u128, dest: &Location, label: &str, kind: TpKind) {
-    let before = host::location_of(p);
-    match host::teleport_to(server, p, dest) {
+pub fn complete_teleport(server: &Server, player: &Player, key: u128, dest: &Location, label: &str, kind: TpKind) {
+    let before = host::location_of(player);
+    match host::teleport_to(server, player, dest) {
         Ok(()) => {
             let now = host::now_ms();
-            with_state(|s| {
-                s.backs.record(key, before.clone());
-                s.persisted.back.insert(logic::uuid_string(key), before);
-                s.save_persisted();
+            with_state(|state| {
+                state.backs.record(key, before.clone());
+                state.persisted.back.insert(logic::uuid_string(key), before);
+                state.save_persisted();
                 if kind == TpKind::Home {
-                    let secs = s.cfg.cooldown_secs;
-                    s.cooldowns.start(key, CdKind::Home, now, secs);
+                    let secs = state.cfg.cooldown_secs;
+                    state.cooldowns.start(key, CdKind::Home, now, secs);
                 }
             });
-            p.show_actionbar(TextComponent::text(""));
-            host::ok(p, &format!("Teletransportado a {label}."));
-            info!("essentials: {} teleported ({kind:?}) to {label}", p.get_name());
+            player.show_actionbar(TextComponent::text(""));
+            host::ok(player, &format!("Teletransportado a {label}."));
+            info!("essentials: {} teleported ({kind:?}) to {label}", player.get_name());
         }
-        Err(e) => host::err(p, &e),
+        Err(error) => host::err(player, &error),
     }
 }
 
 /// Begin a teleport: instant if warmup is 0, otherwise a cancellable countdown.
-pub(crate) fn start_teleport(server: &Server, p: &Player, dest: Location, label: String, kind: TpKind) {
-    let key = host::key_of(p);
+pub(crate) fn start_teleport(server: &Server, player: &Player, dest: Location, label: String, kind: TpKind) {
+    let key = host::key_of(player);
     let now = host::now_ms();
-    let Some(warmup) = with_state(|s| s.cfg.warmup_secs) else {
-        host::err(p, "Estado no disponible.");
+    let Some(warmup) = with_state(|state| state.cfg.warmup_secs) else {
+        host::err(player, "Estado no disponible.");
         return;
     };
     if warmup == 0 {
-        with_state(|s| s.warmups.cancel(key));
-        complete_teleport(server, p, key, &dest, &label, kind);
+        with_state(|state| state.warmups.cancel(key));
+        complete_teleport(server, player, key, &dest, &label, kind);
         return;
     }
     let w = Warmup {
-        start: p.get_position(),
-        entity_id: host::entity_id_of(p),
+        start: player.get_position(),
+        entity_id: host::entity_id_of(player),
         due_ms: now + warmup * 1000,
         dest,
         label: label.clone(),
         kind,
         shown: None,
     };
-    let replaced = with_state(|s| s.warmups.begin(key, w)).unwrap_or(false);
+    let replaced = with_state(|state| state.warmups.begin(key, w)).unwrap_or(false);
     if replaced {
-        host::info(p, "Teletransporte anterior cancelado.");
+        host::info(player, "Teletransporte anterior cancelado.");
     }
-    host::info(p, &format!("Teletransportando a {label} en {warmup}s. No te muevas."));
+    host::info(player, &format!("Teletransportando a {label} en {warmup}s. No te muevas."));
 }
 
 /// Persist config.json atomically after a command changes a setting.
-pub(crate) fn save_cfg(s: &State) -> Result<(), String> {
-    store::save_json(&s.dir.join("config.json"), &s.cfg).map_err(|e| format!("No se pudo guardar config.json: {e}"))
+pub(crate) fn save_cfg(state: &State) -> Result<(), String> {
+    store::save_json(&state.dir.join("config.json"), &state.cfg).map_err(|e| format!("No se pudo guardar config.json: {e}"))
 }
 

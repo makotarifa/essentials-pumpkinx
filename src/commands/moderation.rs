@@ -1,6 +1,3 @@
-//! Moderación: /mute, /unmute, /tempban, /kickall, /vanish, /god, /sudo,
-//! /jail, /togglejail, /jailedplayers, /setjail, /deljail y /jails.
-
 use crate::{
     cmdutil::{fail, greedy_arg, greedy_cmd, has_level, no_arg, one_arg, plain, player_of, reg, say, unavailable, uuid_by_name, CmdResult},
     events,
@@ -30,17 +27,17 @@ impl CommandHandler for MuteCmd {
         if tokens.is_empty() { return Err(fail("Uso: /mute <jugador> [duración] [razón]")); }
         let name = tokens[0];
         let uuid = uuid_by_name(&server, name).ok_or_else(|| fail("Jugador desconocido."))?;
-        let secs = extras::parse_duration(tokens.get(1).copied().unwrap_or("0")).map_err(|e| fail(&e))?;
+        let secs = extras::parse_duration(tokens.get(1).copied().unwrap_or("0")).map_err(|error| fail(&error))?;
         let reason = if tokens.len() > 2 { tokens[2..].join(" ") } else { String::new() };
         let now = host::now_ms();
         let by = sender.get_name();
-        with_state(|s| {
-            s.persisted.mutes.insert(uuid.clone(), ModRecord { until_ms: extras::expiry_from_now(secs, now), reason: reason.clone(), by: by.clone() });
-            s.save_persisted();
+        with_state(|state| {
+            state.persisted.mutes.insert(uuid.clone(), ModRecord { until_ms: extras::expiry_from_now(secs, now), reason: reason.clone(), by: by.clone() });
+            state.save_persisted();
         })
         .ok_or_else(unavailable)?;
-        if let Some(p) = server.get_player_by_name(name) {
-            p.send_system_message(TextComponent::text("Has sido silenciado."), false);
+        if let Some(player) = server.get_player_by_name(name) {
+            player.send_system_message(TextComponent::text("Has sido silenciado."), false);
         }
         say(&sender, &format!("{name} silenciado."));
         Ok(1)
@@ -53,7 +50,7 @@ impl CommandHandler for UnmuteCmd {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
         let name = greedy_arg(&args, "args").trim().to_string();
         let uuid = uuid_by_name(&server, &name).ok_or_else(|| fail("Jugador desconocido."))?;
-        with_state(|s| { s.persisted.mutes.remove(&uuid); s.save_persisted(); }).ok_or_else(unavailable)?;
+        with_state(|state| { state.persisted.mutes.remove(&uuid); state.save_persisted(); }).ok_or_else(unavailable)?;
         say(&sender, &format!("{name} ya no está silenciado."));
         Ok(1)
     }
@@ -68,16 +65,16 @@ impl CommandHandler for TempBanCmd {
         if tokens.len() < 2 { return Err(fail("Uso: /tempban <jugador> <duración> [razón]")); }
         let name = tokens[0];
         let uuid = uuid_by_name(&server, name).ok_or_else(|| fail("Jugador desconocido."))?;
-        let secs = extras::parse_duration(tokens[1]).map_err(|e| fail(&e))?;
+        let secs = extras::parse_duration(tokens[1]).map_err(|error| fail(&error))?;
         let reason = if tokens.len() > 2 { tokens[2..].join(" ") } else { String::new() };
         let by = sender.get_name();
-        with_state(|s| {
-            s.persisted.bans.insert(uuid.clone(), ModRecord { until_ms: extras::expiry_from_now(secs, host::now_ms()), reason: reason.clone(), by: by.clone() });
-            s.save_persisted();
+        with_state(|state| {
+            state.persisted.bans.insert(uuid.clone(), ModRecord { until_ms: extras::expiry_from_now(secs, host::now_ms()), reason: reason.clone(), by: by.clone() });
+            state.save_persisted();
         })
         .ok_or_else(unavailable)?;
-        if let Some(p) = server.get_player_by_name(name) {
-            events::kick_player(&p, &format!("Baneado temporalmente: {reason}"));
+        if let Some(player) = server.get_player_by_name(name) {
+            events::kick_player(&player, &format!("Baneado temporalmente: {reason}"));
         }
         say(&sender, &format!("{name} baneado."));
         Ok(1)
@@ -90,11 +87,11 @@ impl CommandHandler for KickAllCmd {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
         let reason = greedy_arg(&args, "args").trim().to_string();
         let reason = if reason.is_empty() { "Kick por administración.".into() } else { reason };
-        let me_key = player_of(&sender).ok().map(|p| host::key_of(&p));
+        let me_key = player_of(&sender).ok().map(|player| host::key_of(&player));
         let mut count = 0;
-        for p in server.get_all_players() {
-            if me_key.is_some_and(|k| k == host::key_of(&p)) { continue; }
-            events::kick_player(&p, &reason);
+        for player in server.get_all_players() {
+            if me_key.is_some_and(|k| k == host::key_of(&player)) { continue; }
+            events::kick_player(&player, &reason);
             count += 1;
         }
         say(&sender, &format!("Expulsados {count} jugador(es)."));
@@ -115,15 +112,15 @@ impl CommandHandler for VanishCmd {
         } else {
             (logic::uuid_string(host::key_of(&me)), me.get_name(), tokens.first().copied())
         };
-        let on = with_state(|s| {
-            let current = s.persisted.vanished.get(&uuid).copied().unwrap_or(false);
+        let on = with_state(|state| {
+            let current = state.persisted.vanished.get(&uuid).copied().unwrap_or(false);
             let next = crate::cmdutil::parse_mode_arg(mode_token, current);
-            s.persisted.vanished.insert(uuid, next);
-            s.save_persisted();
+            state.persisted.vanished.insert(uuid, next);
+            state.save_persisted();
             next
         })
         .ok_or_else(unavailable)?;
-        let target_key = server.get_player_by_name(&label).map(|p| host::key_of(&p));
+        let target_key = server.get_player_by_name(&label).map(|player| host::key_of(&player));
         if let Some(target_key) = target_key {
             for other in server.get_all_players() {
                 if host::key_of(&other) != target_key {
@@ -150,11 +147,11 @@ impl CommandHandler for GodCmd {
         } else {
             (logic::uuid_string(host::key_of(&me)), me.get_name(), tokens.first().copied())
         };
-        let on = with_state(|s| {
-            let current = s.persisted.god.get(&uuid).copied().unwrap_or(false);
+        let on = with_state(|state| {
+            let current = state.persisted.god.get(&uuid).copied().unwrap_or(false);
             let next = crate::cmdutil::parse_mode_arg(mode_token, current);
-            s.persisted.god.insert(uuid, next);
-            s.save_persisted();
+            state.persisted.god.insert(uuid, next);
+            state.save_persisted();
             next
         })
         .ok_or_else(unavailable)?;
@@ -182,7 +179,7 @@ impl CommandHandler for SudoCmd {
         if name.is_empty() || command.is_empty() {
             return Err(fail("Uso: /sudo <jugador> <comando>"));
         }
-        if host::key_of(&me) == server.get_player_by_name(name).map(|p| host::key_of(&p)).unwrap_or(0) {
+        if host::key_of(&me) == server.get_player_by_name(name).map(|player| host::key_of(&player)).unwrap_or(0) {
             return Err(fail("No puedes hacerte sudo a ti mismo."));
         }
         let lower = command.to_ascii_lowercase();
@@ -200,16 +197,14 @@ impl CommandHandler for SudoCmd {
     }
 }
 
-// ---- cárcel ----------------------------------------------------------------------
-
 struct JailInfoCmd;
 impl CommandHandler for JailInfoCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let list = with_state(|s| {
+        let list = with_state(|state| {
             let now = host::now_ms();
-            s.persisted.jailed.iter()
+            state.persisted.jailed.iter()
                 .filter(|(_, r)| r.until_ms == 0 || r.until_ms > now)
-                .map(|(uuid, _)| s.persisted.names.get(uuid).cloned().unwrap_or_else(|| uuid.clone()).into())
+                .map(|(uuid, _)| state.persisted.names.get(uuid).cloned().unwrap_or_else(|| uuid.clone()).into())
                 .collect::<Vec<String>>()
         })
         .ok_or_else(unavailable)?;
@@ -228,24 +223,24 @@ fn jail_player(server: &Server, sender: &CommandSender, args: &ConsumedArgs, rel
     let (jail_name, until, message) = if release {
         (String::new(), 0u64, format!("{raw} liberado."))
     } else {
-        let jails = with_state(|s| s.cfg.jails.keys().cloned().collect::<Vec<_>>()).ok_or_else(unavailable)?;
+        let jails = with_state(|state| state.cfg.jails.keys().cloned().collect::<Vec<_>>()).ok_or_else(unavailable)?;
         if jails.is_empty() { return Err(fail("No hay cárceles definidas (/setjail).")); }
         let name = tokens.get(1).copied().filter(|n| jails.iter().any(|j| j == n)).unwrap_or(&jails[0]);
-        let secs = tokens.get(2).map(|s| extras::parse_duration(s)).transpose().map_err(|e| fail(&e))?.unwrap_or(0);
+        let secs = tokens.get(2).map(|s| extras::parse_duration(s)).transpose().map_err(|error| fail(&error))?.unwrap_or(0);
         (name.to_string(), extras::expiry_from_now(secs, host::now_ms()), format!("{raw} encarcelado en '{name}'."))
     };
-    let jail_loc = if release { None } else { with_state(|s| s.cfg.jails.get(&jail_name).cloned()).ok_or_else(unavailable)? };
-    with_state(|s| {
+    let jail_loc = if release { None } else { with_state(|state| state.cfg.jails.get(&jail_name).cloned()).ok_or_else(unavailable)? };
+    with_state(|state| {
         if release {
-            s.persisted.jailed.remove(&uuid);
+            state.persisted.jailed.remove(&uuid);
         } else {
-            s.persisted.jailed.insert(uuid.clone(), JailRecord { jail: jail_name.clone(), until_ms: until, by: by.clone() });
+            state.persisted.jailed.insert(uuid.clone(), JailRecord { jail: jail_name.clone(), until_ms: until, by: by.clone() });
         }
-        s.save_persisted();
+        state.save_persisted();
     })
     .ok_or_else(unavailable)?;
-    if let (Some(loc), Some(p)) = (jail_loc, server.get_player_by_name(&raw)) {
-        super::start_teleport(server, &p, loc, "la cárcel".into(), TpKind::Tphere);
+    if let (Some(loc), Some(player)) = (jail_loc, server.get_player_by_name(&raw)) {
+        super::start_teleport(server, &player, loc, "la cárcel".into(), TpKind::Tphere);
     }
     say(sender, &message);
     Ok(1)
@@ -262,7 +257,7 @@ struct ToggleJailCmd;
 impl CommandHandler for ToggleJailCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let uuid = uuid_by_name(&server, &plain(args.get_value("player"))).ok_or_else(|| fail("Jugador desconocido."))?;
-        let jailed = with_state(|s| s.persisted.jailed.contains_key(&uuid)).ok_or_else(unavailable)?;
+        let jailed = with_state(|state| state.persisted.jailed.contains_key(&uuid)).ok_or_else(unavailable)?;
         jail_player(&server, &sender, &args, jailed)
     }
 }
@@ -271,13 +266,13 @@ struct SetJailCmd;
 impl CommandHandler for SetJailCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let name = plain(args.get_value("name"));
         if name.trim().is_empty() { return Err(fail("Uso: /setjail <nombre>")); }
-        let loc: Location = host::location_of(&p);
-        with_state(|s| { s.cfg.jails.insert(name.clone(), loc); super::save_cfg(s) })
+        let loc: Location = host::location_of(&player);
+        with_state(|state| { state.cfg.jails.insert(name.clone(), loc); super::save_cfg(state) })
             .ok_or_else(unavailable)?
-            .map_err(|e| fail(&e))?;
+            .map_err(|error| fail(&error))?;
         say(&sender, &format!("Cárcel '{name}' guardada."));
         Ok(1)
     }
@@ -288,9 +283,9 @@ impl CommandHandler for DelJailCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
         let name = plain(args.get_value("name"));
-        let removed = with_state(|s| {
-            let gone = s.cfg.jails.remove(&name).is_some();
-            if gone { let _ = super::save_cfg(s); }
+        let removed = with_state(|state| {
+            let gone = state.cfg.jails.remove(&name).is_some();
+            if gone { let _ = super::save_cfg(state); }
             gone
         })
         .ok_or_else(unavailable)?;
@@ -303,8 +298,8 @@ impl CommandHandler for DelJailCmd {
 struct JailsCmd;
 impl CommandHandler for JailsCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let list = with_state(|s| {
-            s.cfg.jails.iter().map(|(name, loc)| format!("{name}: {} ({:.0}, {:.0}, {:.0})", loc.world, loc.x, loc.y, loc.z)).collect::<Vec<String>>()
+        let list = with_state(|state| {
+            state.cfg.jails.iter().map(|(name, loc)| format!("{name}: {} ({:.0}, {:.0}, {:.0})", loc.world, loc.x, loc.y, loc.z)).collect::<Vec<String>>()
         })
         .ok_or_else(|| fail("Configuración no disponible."))?;
         say(&sender, &format!("Cárceles: {}", if list.is_empty() { "ninguna".into() } else { list.join(" | ") }));

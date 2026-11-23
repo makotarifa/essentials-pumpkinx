@@ -1,5 +1,3 @@
-//! Modos de juego: /gm, /gma, /gmc, /gms y /gmsp.
-
 use crate::{
     cmdutil::{fail, player_of, plain, reg, resolve_target, word, CmdResult},
     extras,

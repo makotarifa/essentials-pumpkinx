@@ -1,50 +1,51 @@
-# EssentialsFusion
+# EssentialsPumpkinX
 
-Un único plugin WASM para Pumpkin que fusiona **PumpkinEssentials 0.1.0** (homes, warps, `/tpa`, `/back`, warmups/cooldowns), las utilidades estilo **EssentialsX** y las funciones de **VEssentials 1.2.7** (`/gm[a|c|s|sp]`, `/fly`, `/flyspeed`, `/afk`).
+A single WASM plugin for Pumpkin that merges **PumpkinEssentials 0.1.0** (homes, warps, `/tpa`, `/back`, warmups/cooldowns), **EssentialsX**-style utilities, and the **VEssentials 1.2.7** functions (`/gm[a|c|s|sp]`, `/fly`, `/flyspeed`, `/afk`).
 
-## Compatibilidad
+## Compatibility
 
-- Servidor: Pumpkin `0.2.2+26.3-26.60` (Java protocolo 777 / Bedrock 1.26.60).
-- API: `pumpkin-plugin-api` del tag exacto del servidor (`rev eda69440e6369c5f8a05c3f69fc809c40dab93a6`), bindings WIT `pumpkin:plugin@0.1.0`, WASI `p2` (0.2.x).
-- Permisos WASI: `fs.read.data` y `fs.write.data`.
-- `PluginMetadata.name` es **`pumpkin_essentials`** por diseño: todos los nodos de permiso usan ese namespace y la carpeta de datos es la misma de siempre.
+- Server: Pumpkin `0.2.2+26.3-26.60` (Java protocol 777 / Bedrock 1.26.60).
+- API: `pumpkin-plugin-api` from the server's exact tag (`rev eda69440e6369c5f8a05c3f69fc809c40dab93a6`), WIT bindings `pumpkin:plugin@0.1.0`, WASI `p2` (0.2.x).
+- WASI permissions: `fs.read.data` and `fs.write.data`.
+- `PluginMetadata.name` is **`pumpkin_essentials`** by design: all permission nodes use that namespace and the data folder is the usual one.
 
-
-## Estructura del código
+## Code structure
 
 ```text
 src/
-  cmdutil.rs        // helpers compartidos de la capa de comandos
-  commands/         // registro central + un archivo por dominio
+  cmdutil.rs        // shared helpers for the command layer
+  commands/         // central registry + one file per domain
     homes.rs warps.rs tpa.rs movement.rs gamemode.rs info.rs
     chat.rs moderation.rs economy.rs kits.rs items.rs
     environment.rs misc.rs mod.rs
-  store/persist.rs  // FileStore: carga, migración y guardado atómico
-  host/host_traits.rs // Adapter mínimo sobre la API WIT
+  store/persist.rs  // FileStore: load, migration, and atomic save
+  host/host_traits.rs // minimal adapter over the WIT API
 ```
 
-## Compilación
+Coding conventions, the command checklist, and design guidelines are in [`SKILLS.md`](SKILLS.md).
+
+## Building
 
 ```sh
 rustup toolchain install stable
 rustup target add wasm32-wasip2
-cd dev/essentials-fusion
+cd dev/essentials-pumpkinx
 cargo test --lib
 cargo check --target wasm32-wasip2
 cargo build --release --target wasm32-wasip2
-cp target/wasm32-wasip2/release/essentials_fusion.wasm ./essentials_fusion.wasm
+cp target/wasm32-wasip2/release/essentials_pumpkinx.wasm ./essentials_pumpkinx.wasm
 ```
 
-`cargo check --target wasm32-wasip2` se añade a la verificación porque ~70% del código (todo lo que depende de la API WIT de Pumpkin) solo se compila con ese objetivo y por tanto solo se comprueba al construir el `.wasm`.
+`cargo check --target wasm32-wasip2` is part of the verification because ~70% of the code (everything that depends on Pumpkin's WIT API) only compiles for that target and is therefore only checked when building the `.wasm`.
 
-`Cargo.toml` fija el repositorio upstream de Pumpkin al tag del servidor; no hay dependencias privadas.
+`Cargo.toml` pins the Pumpkin upstream repository to the server tag; there are no private dependencies.
 
-## Instalación y migración
+## Installation and migration
 
-1. Apaga el servidor (o usa la recarga de plugins).
-2. Quita/renombra `plugins/PumpkinEssentials.wasm` para no tener dos plugins con el mismo nombre.
-3. Copia `essentials_fusion.wasm` a `plugins/` y arranca.
-4. Los permisos de archivo se aprueban automáticamente; si tu configuración los bloquea:
+1. Shut down the server (or use the plugin reload).
+2. Remove or rename `plugins/PumpkinEssentials.wasm` so that two plugins with the same name do not coexist.
+3. Copy `essentials_pumpkinx.wasm` to `plugins/` and start the server.
+4. File permissions are approved automatically; if your configuration blocks them:
 
    ```toml
    [plugins.overrides.pumpkin_essentials]
@@ -52,168 +53,168 @@ cp target/wasm32-wasip2/release/essentials_fusion.wasm ./essentials_fusion.wasm
    allowed_permissions = ["fs.read.data", "fs.write.data"]
    ```
 
-Los datos se leen y escriben **directamente** en `plugins/data/pumpkin_essentials/`; no hay copia ni conversión. Se mantienen los formatos canónicos:
+Data is read from and written to `plugins/data/pumpkin_essentials/` **directly**; there is no copy or conversion. The canonical formats are preserved:
 
 ```jsonc
 // homes.json
-{ "<uuid>": { "name_last_seen": "Nombre", "limit": 5, "homes": { "base": { "world": "world", "x": 1.0, "y": 64.0, "z": 2.0, "yaw": 0.0, "pitch": 0.0 } } } }
+{ "<uuid>": { "name_last_seen": "Name", "limit": 5, "homes": { "base": { "world": "world", "x": 1.0, "y": 64.0, "z": 2.0, "yaw": 0.0, "pitch": 0.0 } } } }
 // warps.json
 { "spawn": { "world": "world", "x": 0.0, "y": 64.0, "z": 0.0, "yaw": 0.0, "pitch": 0.0, "created_by": "Owner" } }
 ```
 
-Migración automática en carga: envoltorios `players`/`warps`, `position`/`rotation`, `dimension`/`world_name`, números como cadena, `created_by` ausente y wrapper `{"state": ...}` en `state.json`. Todo se reescribe de forma atómica solo si cambió. Un JSON inválido **nunca** se sobreescribe: el plugin falla al cargar para proteger los datos.
+Automatic migration on load: `players`/`warps` wrappers, `position`/`rotation`, `dimension`/`world_name`, numbers as strings, missing `created_by`, and the `{"state": ...}` wrapper in `state.json`. Everything is rewritten atomically only if it changed. Invalid JSON is **never** overwritten: the plugin fails to load in order to protect the data.
 
 ### `config.json`
 
-Conserva las cinco claves originales y añade opciones nuevas con valores por defecto:
+Keeps the five original keys and adds new options with default values:
 
-| Clave | Defecto | Uso |
+| Key | Default | Use |
 |---|---|---|
-| `default_max_homes` | `3` | Límite de homes por jugador |
-| `ops_bypass_home_limit` | `false` | Los ops ignoran el límite |
-| `warmup_secs` | `3` | Espera antes del teleport (0 = instantáneo) |
-| `cooldown_secs` | `30` | Cooldown de `/home` y `/tpa` |
-| `tpa_expire_secs` | `60` | Caducidad de peticiones |
-| `flyspeed_unit` | `0.05` | Velocidad del motor por 1 unidad de `/flyspeed` |
-| `afk_broadcast` | `true` | Anunciar cambios de AFK |
-| `afk_auto_unafk_on_move` | `true` | Quitarse AFK al moverse >0.5 bloques |
-| `afk_tab_name` | `true` | Mostrar `[AFK]` en la lista de jugadores |
-| `restore_fly_on_join` | `true` | Restaurar vuelo guardado al entrar |
-| `restore_afk_on_join` | `true` | Restaurar AFK guardado al entrar |
-| `spawns` | `{}` | Spawns por mundo guardados por `/setspawn` |
+| `default_max_homes` | `3` | Per-player home limit |
+| `ops_bypass_home_limit` | `false` | Ops ignore the limit |
+| `warmup_secs` | `3` | Wait before teleporting (0 = instant) |
+| `cooldown_secs` | `30` | Cooldown for `/home` and `/tpa` |
+| `tpa_expire_secs` | `60` | Request expiry |
+| `flyspeed_unit` | `0.05` | Engine speed per 1 unit of `/flyspeed` |
+| `afk_broadcast` | `true` | Announce AFK changes |
+| `afk_auto_unafk_on_move` | `true` | Clear AFK when moving >0.5 blocks |
+| `afk_tab_name` | `true` | Show `[AFK]` in the tab list |
+| `restore_fly_on_join` | `true` | Restore saved flight on join |
+| `restore_afk_on_join` | `true` | Restore saved AFK on join |
+| `spawns` | `{}` | Per-world spawns saved by `/setspawn` |
 
-Un `config.json` antiguo sigue siendo válido.
+An older `config.json` remains valid.
 
-## Comandos
+## Commands
 
-### Homes y warps
+### Homes and warps
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/sethome [nombre]`, `/home [nombre]`, `/delhome [nombre]` | `pumpkin_essentials:home` | Gestiona homes; nombre por defecto `home` |
-| `/homes`, `/listhomes` | `pumpkin_essentials:home` | Lista clicable **con mundo y coordenadas** y `usados/límite` |
-| `/renamehome <viejo> <nuevo>` | `pumpkin_essentials:renamehome` | Renombra un home conservando su ubicación |
-| `/sethomelimit <jugador> <n>` | `pumpkin_essentials:admin` | Límite individual persistente |
-| `/setwarp`, `/delwarp` | `pumpkin_essentials:admin` | Gestiona warps públicos |
-| `/warp [nombre]`, `/warps` | `pumpkin_essentials:warp` | Teletransporta o lista warps |
+| `/sethome [name]`, `/home [name]`, `/delhome [name]` | `pumpkin_essentials:home` | Manages homes; default name `home` |
+| `/homes`, `/listhomes` | `pumpkin_essentials:home` | Clickable list **with world and coordinates** and `used/limit` |
+| `/renamehome <old> <new>` | `pumpkin_essentials:renamehome` | Renames a home while keeping its location |
+| `/sethomelimit <player> <n>` | `pumpkin_essentials:admin` | Persistent per-player limit |
+| `/setwarp`, `/delwarp` | `pumpkin_essentials:admin` | Manages public warps |
+| `/warp [name]`, `/warps` | `pumpkin_essentials:warp` | Teleports to or lists warps |
 
-### Teletransporte
+### Teleportation
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/tpa <jugador>` | `pumpkin_essentials:tpa` | Pide ir a otro jugador |
-| `/tpahere <jugador>` | `pumpkin_essentials:tpahere` | Pide que el otro jugador venga a ti |
-| `/tpaccept [jugador]`, `/tpdeny [jugador]` | `pumpkin_essentials:tpa` | Responde la petición (la más reciente si no hay argumento) |
-| `/tphere <jugador>` | `pumpkin_essentials:tphere` | Trae a un jugador (op nivel 2) |
-| `/tpall` | `pumpkin_essentials:tpall` | Trae a todos los jugadores online (op nivel 3) |
-| `/tptoggle` | `pumpkin_essentials:tptoggle` | Bloquea/permite peticiones entrantes |
-| `/back` | `pumpkin_essentials:back` | Vuelve a la última ubicación (ahora persistente) |
-| `/spawn`, `/setspawn` | `pumpkin_essentials:spawn` / `:setspawn` | Ir al spawn / guardar el spawn del mundo |
-| `/top [jugador]` | `pumpkin_essentials:top` | Teletransporta al bloque más alto de la columna |
+| `/tpa <player>` | `pumpkin_essentials:tpa` | Requests to teleport to another player |
+| `/tpahere <player>` | `pumpkin_essentials:tpahere` | Requests that the other player teleport to you |
+| `/tpaccept [player]`, `/tpdeny [player]` | `pumpkin_essentials:tpa` | Answers the request (the most recent one if no argument) |
+| `/tphere <player>` | `pumpkin_essentials:tphere` | Brings a player (op level 2) |
+| `/tpall` | `pumpkin_essentials:tpall` | Brings all online players (op level 3) |
+| `/tptoggle` | `pumpkin_essentials:tptoggle` | Blocks/allows incoming requests |
+| `/back` | `pumpkin_essentials:back` | Returns to the last location (now persistent) |
+| `/spawn`, `/setspawn` | `pumpkin_essentials:spawn` / `:setspawn` | Go to spawn / save the world spawn |
+| `/top [player]` | `pumpkin_essentials:top` | Teleports to the highest block in the column |
 
-Los warmups se cancelan al moverte o recibir daño. `/tpahere` usa el mismo sistema de peticiones; al aceptar se teletransporta quien aceptó. `/tptoggle` se respeta tanto en `/tpa` como en `/tpahere`.
+Warmups are cancelled by movement or damage. `/tpahere` uses the same request system; when accepted, the accepting player is teleported. `/tptoggle` applies to both `/tpa` and `/tpahere`.
 
-### Utilidades estilo EssentialsX
+### EssentialsX-style utilities
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/heal [jugador]` | `pumpkin_essentials:heal` | Vida al máximo, comida 20 y saturación 10 |
-| `/feed [jugador]` | `pumpkin_essentials:feed` | Comida 20, saturación 10 y exhausión 0 |
-| `/speed [jugador] <0.1-10.0>` | `pumpkin_essentials:speed` | Velocidad de caminata (1.0 = 0.1 vanilla) |
-| `/exp [jugador] [nivel]` | `pumpkin_essentials:exp` | Muestra o fija el nivel de experiencia |
-| `/getpos [jugador]` | `pumpkin_essentials:getpos` | Mundo, posición, yaw/pitch y distancia |
+| `/heal [player]` | `pumpkin_essentials:heal` | Full health, food 20, and saturation 10 |
+| `/feed [player]` | `pumpkin_essentials:feed` | Food 20, saturation 10, and exhaustion 0 |
+| `/speed [player] <0.1-10.0>` | `pumpkin_essentials:speed` | Walking speed (1.0 = 0.1 vanilla) |
+| `/exp [player] [level]` | `pumpkin_essentials:exp` | Shows or sets the experience level |
+| `/getpos [player]` | `pumpkin_essentials:getpos` | World, position, yaw/pitch, and distance |
 
-### Modos, vuelo, AFK e inventarios
+### Modes, flight, AFK, and inventories
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/gma`, `/gmc`, `/gms`, `/gmsp` [jugador] | `pumpkin_essentials:gamemode` | Aventura, creativo, supervivencia, espectador |
-| `/gm <modo> [jugador]` | `pumpkin_essentials:gamemode` | `s/c/a/sp`, `0/1/2/3` o nombre completo |
-| `/fly [jugador]` | `pumpkin_essentials:fly` | Activa/desactiva vuelo |
-| `/flyspeed [jugador] <0.0-10.0>` | `pumpkin_essentials:flyspeed` | Velocidad de vuelo validada |
-| `/afk [jugador] [razón]` | `pumpkin_essentials:afk` | Estado AFK, razón opcional, `[AFK]` en tab-list |
-| `/invsee <jugador>` | `pumpkin_essentials:invsee` | Vista de solo lectura del inventario del jugador |
-| `/enderchest [jugador]` | `pumpkin_essentials:enderchest` | Abre tu ender chest; vista de solo lectura si es otro |
+| `/gma`, `/gmc`, `/gms`, `/gmsp` [player] | `pumpkin_essentials:gamemode` | Adventure, creative, survival, spectator |
+| `/gm <mode> [player]` | `pumpkin_essentials:gamemode` | `s/c/a/sp`, `0/1/2/3`, or the full name |
+| `/fly [player]` | `pumpkin_essentials:fly` | Toggles flight |
+| `/flyspeed [player] <0.0-10.0>` | `pumpkin_essentials:flyspeed` | Validated flight speed |
+| `/afk [player] [reason]` | `pumpkin_essentials:afk` | AFK state, optional reason, `[AFK]` in the tab list |
+| `/invsee <player>` | `pumpkin_essentials:invsee` | Read-only view of the player's inventory |
+| `/enderchest [player]` | `pumpkin_essentials:enderchest` | Opens your ender chest; read-only view when another player is targeted |
 
-### Iteración 4 — información y teleport avanzado (EssentialsX adaptado)
+### Iteration 4 — information and advanced teleport (EssentialsX adapted)
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/ping [texto]` | `pumpkin_essentials:ping` | Muestra tu latencia o repite el texto |
-| `/playtime [jugador]` | `pumpkin_essentials:playtime` | Tiempo acumulado de juego |
-| `/near [jugador] [radio]` | `pumpkin_essentials:near` | Jugadores cercanos ordenados por distancia |
-| `/seen <jugador>` | `pumpkin_essentials:seen` | Última conexión y último lugar guardado |
-| `/whois <jugador>` | `pumpkin_essentials:whois` | UUID, modo, vida, comida, exp, ping, mundo y AFK |
-| `/info` | `pumpkin_essentials:info` | Versión de Pumpkin, TPS/MSPT, jugadores y mundos |
-| `/compass` | `pumpkin_essentials:compass` | Rumbo cardinal según yaw |
-| `/depth` | `pumpkin_essentials:depth` | Bloques sobre/bajo el nivel del mar |
-| `/warpinfo <nombre>` | `pumpkin_essentials:warpinfo` | Creador, mundo y coordenadas de un warp |
-| `/gc` | `pumpkin_essentials:gc` | CPU, memoria, TPS, jugadores y mundos |
-| `/bottom [jugador]` | `pumpkin_essentials:bottom` | Teleport a `min_y + 1` de la columna |
-| `/tppos <x> <y> <z> [yaw] [pitch] [mundo]` | `pumpkin_essentials:tppos` | Teleport a coordenadas (admite `~` relativas) |
-| `/tpr [mundo] [jugador]` | `pumpkin_essentials:tpr` | Teleport aleatorio a un punto seguro del mundo |
-| `/settpr <mundo> center\|minrange\|maxrange [valor]` | `pumpkin_essentials:settpr` | Configura la zona de `/tpr` (op nivel 3) |
-| `/tpaall [jugador]` | `pumpkin_essentials:tpaall` | Envía `/tpahere` a todos los jugadores online |
-| `/tpacancel [jugador]` | `pumpkin_essentials:tpacancel` | Cancela tus peticiones `/tpa` / `/tpahere` pendientes |
-| `/tpauto [on\|off] [jugador]` | `pumpkin_essentials:tpauto` | Acepta automáticamente peticiones entrantes |
-| `/tpo <jugador> [a-jugador]` | `pumpkin_essentials:tpo` | Teleport instantáneo (propio o de otro jugador) |
-| `/tpoffline <jugador>` | `pumpkin_essentials:tpoffline` | Va a la última ubicación guardada de un desconectado |
-| `/tpohere <jugador>` | `pumpkin_essentials:tpohere` | Trae a un jugador conectado; ver limitación abajo |
-| `/rest [jugador]` | `pumpkin_essentials:rest` | Reinicia exhausión y saturación |
-| `/world [nombre]` | `pumpkin_essentials:world` | Lista mundos o va al spawn del mundo indicado |
+| `/ping [text]` | `pumpkin_essentials:ping` | Shows your latency or repeats the text |
+| `/playtime [player]` | `pumpkin_essentials:playtime` | Accumulated play time |
+| `/near [player] [radius]` | `pumpkin_essentials:near` | Nearby players sorted by distance |
+| `/seen <player>` | `pumpkin_essentials:seen` | Last connection and last saved location |
+| `/whois <player>` | `pumpkin_essentials:whois` | UUID, mode, health, food, exp, ping, world, and AFK |
+| `/info` | `pumpkin_essentials:info` | Pumpkin version, TPS/MSPT, players, and worlds |
+| `/compass` | `pumpkin_essentials:compass` | Cardinal heading from yaw |
+| `/depth` | `pumpkin_essentials:depth` | Blocks above/below sea level |
+| `/warpinfo <name>` | `pumpkin_essentials:warpinfo` | Creator, world, and coordinates of a warp |
+| `/gc` | `pumpkin_essentials:gc` | CPU, memory, TPS, players, and worlds |
+| `/bottom [player]` | `pumpkin_essentials:bottom` | Teleport to `min_y + 1` of the column |
+| `/tppos <x> <y> <z> [yaw] [pitch] [world]` | `pumpkin_essentials:tppos` | Teleport to coordinates (supports relative `~`) |
+| `/tpr [world] [player]` | `pumpkin_essentials:tpr` | Random teleport to a safe point in the world |
+| `/settpr <world> center\|minrange\|maxrange [value]` | `pumpkin_essentials:settpr` | Configures the `/tpr` area (op level 3) |
+| `/tpaall [player]` | `pumpkin_essentials:tpaall` | Sends `/tpahere` to all online players |
+| `/tpacancel [player]` | `pumpkin_essentials:tpacancel` | Cancels your pending `/tpa` / `/tpahere` requests |
+| `/tpauto [on\|off] [player]` | `pumpkin_essentials:tpauto` | Automatically accepts incoming requests |
+| `/tpo <player> [target-player]` | `pumpkin_essentials:tpo` | Instant teleport (your own or another player's) |
+| `/tpoffline <player>` | `pumpkin_essentials:tpoffline` | Goes to the last saved location of an offline player |
+| `/tpohere <player>` | `pumpkin_essentials:tpohere` | Brings an online player; see the limitation below |
+| `/rest [player]` | `pumpkin_essentials:rest` | Resets exhaustion and saturation |
+| `/world [name]` | `pumpkin_essentials:world` | Lists worlds or goes to the given world's spawn |
 
-Nuevas claves de `config.json` (valores por defecto): `near_max_radius=200`, `tpr_min_range=50.0`, `tpr_max_range=1000.0`, `tpr_attempts=24` y `tpr` (mapa por mundo con `center`, `min_range`, `max_range`). `/settpr center` guarda tu posición actual como centro; `/tpr` elige un ángulo y distancia aleatorios en ese anillo, usa `get_top_block_y` y aplica el mismo warmup que los demás teleports.
+New `config.json` keys (with default values): `near_max_radius=200`, `tpr_min_range=50.0`, `tpr_max_range=1000.0`, `tpr_attempts=24`, and `tpr` (a per-world map with `center`, `min_range`, `max_range`). `/settpr center` saves your current position as the center; `/tpr` picks a random angle and distance within that ring, uses `get_top_block_y`, and applies the same warmup as other teleports.
 
-### Iteración 5 — chat, moderación y staff (EssentialsX adaptado)
+### Iteration 5 — chat, moderation, and staff (EssentialsX adapted)
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/broadcastworld [mundo] <mensaje>` | `pumpkin_essentials:broadcastworld` | Anuncio solo para los jugadores de un mundo |
-| `/msgtoggle [on\|off] [jugador]` | `pumpkin_essentials:msgtoggle` | Bloquea respuestas `/r` entrantes |
-| `/socialspy [on\|off] [jugador]` | `pumpkin_essentials:socialspy` | Copia de las respuestas `/r` al staff |
-| `/ignore [jugador]` | `pumpkin_essentials:ignore` | Lista/alternar ignorados (afecta a `/r` y `/mail`) |
-| `/nick [jugador] <nick\|off>` | `pumpkin_essentials:nick` | Apodo en tab-list; `/nick off` lo quita |
-| `/realname <apodo>` | `pumpkin_essentials:realname` | Nombre real asociado a un apodo |
-| `/mail [read\|clear\|<jugador> <mensaje>]` | `pumpkin_essentials:mail` | Correo interno persistente |
-| `/r <mensaje>` | `pumpkin_essentials:r` | Responde al último remitente conocido |
-| `/rtoggle [on\|off] [jugador]` | `pumpkin_essentials:rtoggle` | Permite o bloquea respuestas |
-| `/antioch` | `pumpkin_essentials:antioch` | Explosión de TNT frente al jugador |
-| `/customtext [clave]` | `pumpkin_essentials:customtext` | Muestra textos configurados (`config.json`) |
-| `/rules` | `pumpkin_essentials:rules` | Muestra las reglas de `config.json` |
-| `/helpop <mensaje>` | `pumpkin_essentials:helpop` | Envía el mensaje a quienes tienen `:helpop.receive` |
-| `/backup` | `pumpkin_essentials:backup` | Copia los JSON del plugin a `backups/<timestamp>/` |
-| `/essentials [version]` | `pumpkin_essentials:essentials` | Información del plugin |
-| `/ext [jugador]` | `pumpkin_essentials:ext` | Apaga el fuego (`set_fire_ticks(0)`) |
-| `/mute <jugador> [duración] [razón]` | `pumpkin_essentials:mute` | Silencia el chat (alias `/unmute`) |
-| `/tempban <jugador> <duración> [razón]` | `pumpkin_essentials:tempban` | Banea temporalmente y expulsa al jugador |
-| `/kickall [razón]` | `pumpkin_essentials:kickall` | Expulsa a todos salvo al emisor |
-| `/vanish [on\|off] [jugador]` | `pumpkin_essentials:vanish` | Oculta jugadores mediante `hide_player` |
-| `/god [on\|off] [jugador]` | `pumpkin_essentials:god` | Invulnerabilidad persistente |
-| `/sudo <jugador> <comando>` | `pumpkin_essentials:sudo` | Ejecuta un comando como otro jugador (con lista de bloqueo) |
-| `/jailedplayers` | `pumpkin_essentials:jailedplayers` | Lista jugadores encarcelados |
-| `/jail <jugador> [cárcel] [duración]` | `pumpkin_essentials:jail` | Encarcela y teletransporta a la cárcel |
-| `/setjail <nombre>` | `pumpkin_essentials:setjail` | Guarda tu posición como cárcel |
-| `/deljail <nombre>` | `pumpkin_essentials:deljail` | Elimina una cárcel |
-| `/togglejail <jugador> [cárcel] [duración]` | `pumpkin_essentials:togglejail` | Encarcela o libera según su estado |
+| `/broadcastworld [world] <message>` | `pumpkin_essentials:broadcastworld` | Announcement only for players in a world |
+| `/msgtoggle [on\|off] [player]` | `pumpkin_essentials:msgtoggle` | Blocks incoming `/r` replies |
+| `/socialspy [on\|off] [player]` | `pumpkin_essentials:socialspy` | Copies `/r` replies to staff |
+| `/ignore [player]` | `pumpkin_essentials:ignore` | Lists/toggles ignored players (affects `/r` and `/mail`) |
+| `/nick [player] <nick\|off>` | `pumpkin_essentials:nick` | Tab-list nickname; `/nick off` removes it |
+| `/realname <nickname>` | `pumpkin_essentials:realname` | Real name associated with a nickname |
+| `/mail [read\|clear\|<player> <message>]` | `pumpkin_essentials:mail` | Persistent internal mail |
+| `/r <message>` | `pumpkin_essentials:r` | Replies to the last known sender |
+| `/rtoggle [on\|off] [player]` | `pumpkin_essentials:rtoggle` | Allows or blocks replies |
+| `/antioch` | `pumpkin_essentials:antioch` | TNT explosion in front of the player |
+| `/customtext [key]` | `pumpkin_essentials:customtext` | Shows configured texts (`config.json`) |
+| `/rules` | `pumpkin_essentials:rules` | Shows the rules from `config.json` |
+| `/helpop <message>` | `pumpkin_essentials:helpop` | Sends the message to players with `:helpop.receive` |
+| `/backup` | `pumpkin_essentials:backup` | Copies the plugin JSON files to `backups/<timestamp>/` |
+| `/essentials [version]` | `pumpkin_essentials:essentials` | Plugin information |
+| `/ext [player]` | `pumpkin_essentials:ext` | Extinguishes fire (`set_fire_ticks(0)`) |
+| `/mute <player> [duration] [reason]` | `pumpkin_essentials:mute` | Mutes chat (alias `/unmute`) |
+| `/tempban <player> <duration> [reason]` | `pumpkin_essentials:tempban` | Temporarily bans and kicks the player |
+| `/kickall [reason]` | `pumpkin_essentials:kickall` | Kicks everyone except the sender |
+| `/vanish [on\|off] [player]` | `pumpkin_essentials:vanish` | Hides players using `hide_player` |
+| `/god [on\|off] [player]` | `pumpkin_essentials:god` | Persistent invulnerability |
+| `/sudo <player> <command>` | `pumpkin_essentials:sudo` | Runs a command as another player (with a blocklist) |
+| `/jailedplayers` | `pumpkin_essentials:jailedplayers` | Lists jailed players |
+| `/jail <player> [jail] [duration]` | `pumpkin_essentials:jail` | Jails and teleports to the jail |
+| `/setjail <name>` | `pumpkin_essentials:setjail` | Saves your position as a jail |
+| `/deljail <name>` | `pumpkin_essentials:deljail` | Deletes a jail |
+| `/togglejail <player> [jail] [duration]` | `pumpkin_essentials:togglejail` | Jails or releases depending on the current state |
 
-Duraciones: `30` (segundos), `5m`, `2h`, `1d` o `perm`/`0` (permanente). Nuevas claves de `config.json`: `custom_texts` (mapa clave -> líneas), `rules` (lista) y `jails` (mapa nombre -> ubicación).
+Durations: `30` (seconds), `5m`, `2h`, `1d`, or `perm`/`0` (permanent). New `config.json` keys: `custom_texts` (a key -> lines map), `rules` (a list), and `jails` (a name -> location map).
 
-### Iteración 6 — Economía integrada
+### Iteration 6 — integrated economy
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/balance [jugador]` (alias `/bal`) | `pumpkin_essentials:balance` | Saldo propio o de otro jugador |
-| `/balancetop [página]` | `pumpkin_essentials:balancetop` | Ranking de saldos, 10 por página |
-| `/eco <set\|add\|take\|reset> <jugador> <cantidad>` | `pumpkin_essentials:eco` | Administración de saldo (op nivel 3) |
-| `/pay <jugador> <cantidad>` | `pumpkin_essentials:pay` | Pagar; por defecto requiere `/payconfirm` |
-| `/payconfirm` | `pumpkin_essentials:payconfirm` | Confirma el último pago preparado |
-| `/paytoggle [jugador]` | `pumpkin_essentials:paytoggle` | Dejar de / volver a aceptar pagos |
-| `/payconfirmtoggle` | `pumpkin_essentials:payconfirmtoggle` | Activa/desactiva la confirmación de `/pay` |
-| `/sell [all\|hand\|<ítem>]` | `pumpkin_essentials:sell` | Vende montones según la tabla `worth` |
-| `/worth <cantidad> <ítem>` | `pumpkin_essentials:worth` | Consulta precio unitario y total |
-| `/setworth <ítem> <precio>` | `pumpkin_essentials:setworth` | Fija precio por unidad (op nivel 3) |
+| `/balance [player]` (alias `/bal`) | `pumpkin_essentials:balance` | Own or another player's balance |
+| `/balancetop [page]` | `pumpkin_essentials:balancetop` | Balance ranking, 10 per page |
+| `/eco <set\|add\|take\|reset> <player> <amount>` | `pumpkin_essentials:eco` | Balance administration (op level 3) |
+| `/pay <player> <amount>` | `pumpkin_essentials:pay` | Payment; requires `/payconfirm` by default |
+| `/payconfirm` | `pumpkin_essentials:payconfirm` | Confirms the last prepared payment |
+| `/paytoggle [player]` | `pumpkin_essentials:paytoggle` | Stops/resumes accepting payments |
+| `/payconfirmtoggle` | `pumpkin_essentials:payconfirmtoggle` | Toggles `/pay` confirmation |
+| `/sell [all\|hand\|<item>]` | `pumpkin_essentials:sell` | Sells stacks according to the `worth` table |
+| `/worth <amount> <item>` | `pumpkin_essentials:worth` | Shows the unit and total price |
+| `/setworth <item> <price>` | `pumpkin_essentials:setworth` | Sets the unit price (op level 3) |
 
-El dinero se guarda en `plugins/data/pumpkin_essentials/economy.json` (ledger propio, sin Vault/PVault). Los importes internos son enteros en céntavos; `config.json` añade `currency_symbol` (`$`) y `currency_decimals` (`2`). El formato del archivo es:
+Money is stored in `plugins/data/pumpkin_essentials/economy.json` (a private ledger, no Vault/PVault). Internal amounts are integer cents; `config.json` adds `currency_symbol` (`$`) and `currency_decimals` (`2`). The file format is:
 
 ```jsonc
 {
@@ -222,44 +223,44 @@ El dinero se guarda en `plugins/data/pumpkin_essentials/economy.json` (ledger pr
   "worth": { "minecraft:stone": 1, "minecraft:diamond": 500 },
   "pay_off": { "<uuid>": false },
   "payconfirm_off": { "<uuid>": false },
-  "pending_pay": { "<uuid>": { "to_uuid": "<uuid>", "to_name": "Nombre", "amount": 250, "at_ms": 0 } }
+  "pending_pay": { "<uuid>": { "to_uuid": "<uuid>", "to_name": "Name", "amount": 250, "at_ms": 0 } }
 }
 ```
 
-`load_economy` solo lee: las formas legacy (`{"economy": ...}` o `schema` antiguo) se normalizan en memoria y la primera ejecución del tick escribe la forma canónica. JSON corrupto = error de carga sin sobreescritura. Las claves de ítem aceptan `minecraft:stone` o `stone` (se normalizan a minúsculas con namespace).
+`load_economy` only reads: legacy forms (`{"economy": ...}` or an older `schema`) are normalised in memory and the first tick writes the canonical form. Corrupt JSON = load error with no overwrite. Item keys accept `minecraft:stone` or `stone` (normalised to lowercase with a namespace).
 
-### Iteración 7 — Kits e ítems
+### Iteration 7 — kits and items
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/kit [nombre] [jugador]` | `pumpkin_essentials:kit` | Lista kits o entrega uno (con cooldown) |
-| `/createkit <nombre> <delay_segundos>` | `pumpkin_essentials:createkit` | Guarda el inventario actual como kit (op nivel 3) |
-| `/delkit <nombre>` | `pumpkin_essentials:delkit` | Elimina un kit (op nivel 3) |
-| `/kitreset <kit> [jugador]` | `pumpkin_essentials:kitreset` | Reinicia el cooldown de un kit (op nivel 2) |
-| `/showkit <nombre>` | `pumpkin_essentials:showkit` | Muestra el contenido de un kit |
-| `/item <id> [cantidad] [jugador]` | `pumpkin_essentials:item` | Crea y entrega un objeto |
-| `/itemdb [id]` | `pumpkin_essentials:itemdb` | Muestra la clave de registry del objeto en mano |
-| `/itemlore add\|set\|clear <texto>` | `pumpkin_essentials:itemlore` | Edita el lore del objeto en mano |
-| `/itemname <nombre\|off>` | `pumpkin_essentials:itemname` | Renombra el objeto en mano |
-| `/repair [all]` | `pumpkin_essentials:repair` | Limitación de API: ver nota abajo |
-| `/unlimited <ítem\|list\|clear> [jugador]` | `pumpkin_essentials:unlimited` | Gestiona objetos marcados como ilimitados |
-| `/hat` | `pumpkin_essentials:hat` | Coloca el objeto en mano como casco |
-| `/more [cantidad]` | `pumpkin_essentials:more` | Amplía el montón en mano hasta su máximo |
-| `/book` | `pumpkin_essentials:book` | Entrega un libro en blanco |
-| `/powertool <comando\|d:> [ítem]` | `pumpkin_essentials:powertool` | Asigna/borra comandos al objeto en mano |
-| `/powertoollist` | `pumpkin_essentials:powertoollist` | Lista powertools |
-| `/powertooltoggle` | `pumpkin_essentials:powertooltoggle` | Activa/desactiva powertools |
-| `/condense [ítem]` | `pumpkin_essentials:condense` | Empaqueta montones del inventario |
-| `/remove [tipo]` | `pumpkin_essentials:remove` | Elimina entidades del mundo (op nivel 3) |
-| `/spawnmob <mob> [cantidad] [jugador]` | `pumpkin_essentials:spawnmob` | Genera entidades (op nivel 3) |
-| `/spawner <mob> [delay]` | `pumpkin_essentials:spawner` | Coloca un bloque spawner (op nivel 3) |
-| `/skull <nombre>` | `pumpkin_essentials:skull` | Entrega una cabeza con nombre |
-| `/kittycannon` | `pumpkin_essentials:kittycannon` | Lanza varios gatos |
-| `/beezooka` | `pumpkin_essentials:beezooka` | Lanza una abeja que explota al impactar |
-| `/fireball [tipo]` | `pumpkin_essentials:fireball` | Lanza un proyectil |
-| `/potion <efecto>` | `pumpkin_essentials:potion` | Entrega una poción con nombre |
+| `/kit [name] [player]` | `pumpkin_essentials:kit` | Lists kits or gives one (with a cooldown) |
+| `/createkit <name> <delay_seconds>` | `pumpkin_essentials:createkit` | Saves the current inventory as a kit (op level 3) |
+| `/delkit <name>` | `pumpkin_essentials:delkit` | Deletes a kit (op level 3) |
+| `/kitreset <kit> [player]` | `pumpkin_essentials:kitreset` | Resets a kit's cooldown (op level 2) |
+| `/showkit <name>` | `pumpkin_essentials:showkit` | Shows the contents of a kit |
+| `/item <id> [amount] [player]` | `pumpkin_essentials:item` | Creates and gives an item |
+| `/itemdb [id]` | `pumpkin_essentials:itemdb` | Shows the registry key of the item in hand |
+| `/itemlore add\|set\|clear <text>` | `pumpkin_essentials:itemlore` | Edits the lore of the item in hand |
+| `/itemname <name\|off>` | `pumpkin_essentials:itemname` | Renames the item in hand |
+| `/repair [all]` | `pumpkin_essentials:repair` | API limitation: see the note below |
+| `/unlimited <item\|list\|clear> [player]` | `pumpkin_essentials:unlimited` | Manages items marked as unlimited |
+| `/hat` | `pumpkin_essentials:hat` | Puts the item in hand on your head |
+| `/more [amount]` | `pumpkin_essentials:more` | Expands the stack in hand up to its maximum |
+| `/book` | `pumpkin_essentials:book` | Gives a blank book |
+| `/powertool <command\|d:> [item]` | `pumpkin_essentials:powertool` | Assigns/removes commands on the item in hand |
+| `/powertoollist` | `pumpkin_essentials:powertoollist` | Lists powertools |
+| `/powertooltoggle` | `pumpkin_essentials:powertooltoggle` | Toggles powertools |
+| `/condense [item]` | `pumpkin_essentials:condense` | Packs inventory stacks |
+| `/remove [type]` | `pumpkin_essentials:remove` | Removes entities in the world (op level 3) |
+| `/spawnmob <mob> [amount] [player]` | `pumpkin_essentials:spawnmob` | Spawns entities (op level 3) |
+| `/spawner <mob> [delay]` | `pumpkin_essentials:spawner` | Places a spawner block (op level 3) |
+| `/skull <name>` | `pumpkin_essentials:skull` | Gives a named head |
+| `/kittycannon` | `pumpkin_essentials:kittycannon` | Launches several cats |
+| `/beezooka` | `pumpkin_essentials:beezooka` | Launches a bee that explodes on impact |
+| `/fireball [type]` | `pumpkin_essentials:fireball` | Launches a projectile |
+| `/potion <effect>` | `pumpkin_essentials:potion` | Gives a named potion |
 
-Kits, cooldowns, powertools y objetos ilimitados se guardan en `plugins/data/pumpkin_essentials/kits.json`:
+Kits, cooldowns, powertools, and unlimited items are stored in `plugins/data/pumpkin_essentials/kits.json`:
 
 ```jsonc
 {
@@ -272,137 +273,133 @@ Kits, cooldowns, powertools y objetos ilimitados se guardan en `plugins/data/pum
 }
 ```
 
-Igual que `state.json`/`economy.json`: `load_kits` solo lee, aplica migraciones legacy en memoria y la primera ejecución del tick escribe el archivo canónico. JSON corrupto = error de carga sin sobreescritura. Las claves de objeto aceptan `minecraft:stone` o `stone`.
+As with `state.json`/`economy.json`: `load_kits` only reads, applies legacy migrations in memory, and the first tick writes the canonical file. Corrupt JSON = load error with no overwrite. Item keys accept `minecraft:stone` or `stone`.
 
-### Iteración 8 — Bloques, entornos y efectos
+### Iteration 8 — blocks, environments, and effects
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/anvil`, `/cartographytable`, `/grindstone`, `/loom`, `/smithingtable`, `/workbench` | nodos con el mismo nombre | Abre la pantalla correspondiente mediante `Gui::new(Screen::…)` |
-| `/disposal` | `pumpkin_essentials:disposal` | Abre un inventario de 54 ranuras vacío |
-| `/editsign` | `pumpkin_essentials:editsign` | Abre el editor de cartel del bloque mirado (~5 bloques) |
-| `/jump` | `pumpkin_essentials:jump` | Teletransporta al punto mirado, un bloque arriba |
-| `/ice [jugador]` | `pumpkin_essentials:ice` | Congela (ticks de escarcha + velocidad cero) |
-| `/tree`, `/bigtree` | `pumpkin_essentials:tree` / `:bigtree` | Genera un árbol de roble simple o grande |
-| `/break` | `pumpkin_essentials:break` | Elimina el bloque mirado (protege bedrock salvo op3) |
-| `/burn <jugador> <segundos>` | `pumpkin_essentials:burn` | Prende fuego al jugador |
-| `/lightning [jugador]` | `pumpkin_essentials:lightning` | Invoca un rayo en el objetivo o punto mirado |
-| `/thunder on\|off` | `pumpkin_essentials:thunder` | Activa/desactiva tormenta y lluvia del mundo |
-| `/nuke [jugadores]` | `pumpkin_essentials:nuke` | Bombardeo con confirmación (op nivel 3) |
-| `/suicide` | `pumpkin_essentials:suicide` | Termina con tu propia vida y lo anuncia |
-| `/clearinventory [jugador]` | `pumpkin_essentials:clearinventory` | Vacía inventario, armour y mano (confirmable) |
-| `/clearinventoryconfirmtoggle` | `pumpkin_essentials:clearinventoryconfirmtoggle` | Activa/desactiva esa confirmación |
-| `/ptime [get\|day\|noon\|night\|midnight\|ticks]` | `pumpkin_essentials:ptime` | Consulta/ajusta la hora del mundo |
-| `/pweather [get\|clear\|rain\|reset]` | `pumpkin_essentials:pweather` | Clima personal por jugador (API disponible) |
+| `/anvil`, `/cartographytable`, `/grindstone`, `/loom`, `/smithingtable`, `/workbench` | nodes with the same name | Opens the corresponding screen via `Gui::new(Screen::…)` |
+| `/disposal` | `pumpkin_essentials:disposal` | Opens an empty 54-slot inventory |
+| `/editsign` | `pumpkin_essentials:editsign` | Opens the sign editor of the block being looked at (~5 blocks) |
+| `/jump` | `pumpkin_essentials:jump` | Teleports to the targeted point, one block above |
+| `/ice [player]` | `pumpkin_essentials:ice` | Freezes (frost ticks + zero velocity) |
+| `/tree`, `/bigtree` | `pumpkin_essentials:tree` / `:bigtree` | Generates a simple or large oak tree |
+| `/break` | `pumpkin_essentials:break` | Removes the targeted block (protects bedrock except op3) |
+| `/burn <player> <seconds>` | `pumpkin_essentials:burn` | Sets the player on fire |
+| `/lightning [player]` | `pumpkin_essentials:lightning` | Summons lightning at the target or targeted point |
+| `/thunder on\|off` | `pumpkin_essentials:thunder` | Toggles the world's storm and rain |
+| `/nuke [players]` | `pumpkin_essentials:nuke` | Grid bombardment with confirmation (op level 3) |
+| `/suicide` | `pumpkin_essentials:suicide` | Ends your own life and announces it |
+| `/clearinventory [player]` | `pumpkin_essentials:clearinventory` | Clears inventory, armour, and hand (confirmable) |
+| `/clearinventoryconfirmtoggle` | `pumpkin_essentials:clearinventoryconfirmtoggle` | Toggles that confirmation |
+| `/ptime [get\|day\|noon\|night\|midnight\|ticks]` | `pumpkin_essentials:ptime` | Gets/sets the world time |
+| `/pweather [get\|clear\|rain\|reset]` | `pumpkin_essentials:pweather` | Per-player weather (API available) |
 
-`/nuke` y `/clearinventory` usan una confirmación en memoria: la primera ejecución prepara la acción y hay que repetir el comando para ejecutarla. `/clearinventoryconfirmtoggle` guarda `clear_confirm_off` en `state.json` (prefijo ya migrado de forma segura). `/ptime` es mundial porque la API WIT 0.1 no expone hora por jugador; `/pweather` sí usa `set_player_weather`/`reset_player_weather`.
+`/nuke` and `/clearinventory` use an in-memory confirmation: the first run prepares the action and you must repeat the command to execute it. `/clearinventoryconfirmtoggle` saves `clear_confirm_off` in `state.json` (the prefix has already been migrated safely). `/ptime` is world-wide because WIT 0.1 does not expose per-player time; `/pweather` does use `set_player_weather`/`reset_player_weather`.
 
-### Iteración 9 — Auditoría final y cierre de huecos
+### Iteration 9 — final audit and gap closure
 
-Se compararon los **153 comandos oficiales** de EssentialsX 2.x (`plugin.yml`) con los 146 nombres que el plugin registraba y con los comandos del núcleo Pumpkin y de PumpChat/dMOTD. El inventario completo está en [`COMPAT.md`](COMPAT.md): 88 IMPLEMENTADO, 19 CUBIERTO, 43 LIMITADO y 3 AÑADIDO AHORA.
+The **153 official commands** of EssentialsX 2.x (`plugin.yml`) were compared with the 146 names the plugin registered at the time and with the commands of the Pumpkin core and PumpChat/dMOTD. The full inventory is in [`COMPAT.md`](COMPAT.md): 88 IMPLEMENTED, 19 COVERED, 43 LIMITED, and 3 ADDED NOW.
 
-| Comando | Permiso | Descripción |
+| Command | Permission | Description |
 |---|---|---|
-| `/stonecutter` | `pumpkin_essentials:stonecutter` | Abre la pantalla del cortador de piedra (hueco real) |
-| `/firework` | `pumpkin_essentials:firework` | Entrega un cohete pirotécnico (hueco real) |
-| `/jails` | `pumpkin_essentials:jails` | Lista las cárceles definidas con `/setjail` (hueco real) |
+| `/stonecutter` | `pumpkin_essentials:stonecutter` | Opens the stonecutter screen (real gap) |
+| `/firework` | `pumpkin_essentials:firework` | Gives a firework rocket (real gap) |
+| `/jails` | `pumpkin_essentials:jails` | Lists jails defined with `/setjail` (real gap) |
 
-Tras esta iteración el plugin registra **149 nombres de comando** (incluye alias propios como `/bal`, `/gm`, `/listhomes` y `/payconfirm`). No se duplican comandos del núcleo ni de otros plugins.
+After this iteration the plugin registers **149 command names** (including its own aliases such as `/bal`, `/gm`, `/listhomes`, and `/payconfirm`). No core commands or commands from other plugins are duplicated.
 
-## Persistencia de sesión (`state.json`)
+## Session persistence (`state.json`)
 
-Nuevo archivo en `plugins/data/pumpkin_essentials/`:
+New file in `plugins/data/pumpkin_essentials/`:
 
 ```jsonc
 {
   "schema": 2,
   "back": { "<uuid>": { "world": "...", "x": 0.0, "y": 64.0, "z": 0.0, "yaw": 0.0, "pitch": 0.0 } },
   "fly": { "<uuid>": { "allow_flying": true, "flying": true, "fly_speed": 0.15 } },
-  "afk": { "<uuid>": { "active": true, "reason": "comiendo", "since_ms": 0 } },
+  "afk": { "<uuid>": { "active": true, "reason": "eating", "since_ms": 0 } },
   "tpa_off": { "<uuid>": true },
   "tpa_auto": { "<uuid>": false },
   "playtime_ms": { "<uuid>": 3600000 },
   "last_seen_ms": { "<uuid>": 1700000000000 },
   "last_location": { "<uuid>": { "world": "world", "x": 0.0, "y": 64.0, "z": 0.0, "yaw": 0.0, "pitch": 0.0 } },
-  "names": { "<uuid>": "Nombre" },
+  "names": { "<uuid>": "Name" },
   "msg_off": { "<uuid>": false },
   "social_spy": { "<uuid>": true },
-  "ignored": { "<uuid>": ["<otro-uuid>"] },
+  "ignored": { "<uuid>": ["<other-uuid>"] },
   "nicks": { "<uuid>": "Nick" },
-  "reply_target": { "<uuid>": "<otro-uuid>" },
+  "reply_target": { "<uuid>": "<other-uuid>" },
   "rtoggle": { "<uuid>": true },
-  "mail": { "<uuid>": [{ "from": "Nombre", "from_uuid": "<uuid>", "body": "hola", "time_ms": 0, "read": false }] },
+  "mail": { "<uuid>": [{ "from": "Name", "from_uuid": "<uuid>", "body": "hello", "time_ms": 0, "read": false }] },
   "mutes": { "<uuid>": { "until_ms": 0, "reason": "spam", "by": "Mod" } },
-  "bans": { "<uuid>": { "until_ms": 0, "reason": "abuso", "by": "Admin" } },
+  "bans": { "<uuid>": { "until_ms": 0, "reason": "abuse", "by": "Admin" } },
   "vanished": { "<uuid>": false },
   "god": { "<uuid>": false },
   "jailed": { "<uuid>": { "jail": "main", "until_ms": 0, "by": "Mod" } }
 }
 ```
 
-- `load_state` **solo lee y parsea**: las formas legacy (`{"state": ...}`, `schema=1`) se normalizan en memoria y se marca `needs_migration`. La primera ejecución del tick escribe la forma canónica, así que el arranque no hace escrituras bloqueantes.
-- Se guarda tras cada teleport, cambio de vuelo/AFK, moderación, correo, preferencias dechat y desconexión. El tiempo de juego se acumula en el tick cada ~250 ms y se escribe cada ~2 s.
-- Al **entrar** se restauran `/back`, vuelo, AFK, apodo `[AFK]`, vanish, god y cárcel; si hay un ban activo se expulsa al jugador con el motivo.
-- El chat se cancela para jugadores silenciados o encarcelados; `/tempban` expulsa al jugador y el ban se comprueba en cada conexión.
-- Archivo ausente = sin estado. JSON corrupto = error de carga, sin sobreescritura. Los esquemas anteriores se amplían sin perder datos.
+- `load_state` **only reads and parses**: legacy forms (`{"state": ...}`, `schema=1`) are normalised in memory and `needs_migration` is flagged. The first tick writes the canonical form, so startup performs no blocking writes.
+- State is saved after every teleport, flight/AFK change, moderation action, mail, chat preference change, and disconnect. Playtime accumulates in the tick every ~250 ms and is written every ~2 s.
+- On **join**, `/back`, flight, AFK, the `[AFK]` tag, vanish, god, and jail are restored; if an active ban exists, the player is kicked with the reason.
+- Chat is cancelled for muted or jailed players; `/tempban` kicks the player and the ban is checked on every connection.
+- Missing file = no state. Corrupt JSON = load error, no overwrite. Older schemas are extended without data loss.
 
-## Nodos de permiso
+## Permission nodes
 
-Todos pertenecen al namespace `pumpkin_essentials:` (obligatorio: el loader rechaza otros namespaces).
+All belong to the `pumpkin_essentials:` namespace (required: the loader rejects other namespaces).
 
 **Allow:** `home`, `warp`, `tpa`, `back`, `afk`, `spawn`, `top`, `tptoggle`, `tpahere`, `renamehome`, `ping`, `playtime`, `near`, `compass`, `depth`, `warpinfo`, `info`, `rest`, `tpacancel`, `tpauto`, `tpr`, `world`, `msgtoggle`, `ignore`, `nick`, `realname`, `mail`, `r`, `rtoggle`, `helpop`, `customtext`, `rules`, `balance`, `balancetop`, `pay`, `paytoggle`, `payconfirmtoggle`, `payconfirm`, `sell`, `worth`, `kit`, `showkit`, `itemdb`, `powertoollist`, `powertooltoggle`, `anvil`, `cartographytable`, `grindstone`, `loom`, `smithingtable`, `workbench`, `disposal`, `editsign`, `jump`, `ptime`, `pweather`, `stonecutter`.
 
-**Op nivel 2:** `gamemode`, `fly`, `flyspeed`, `heal`, `feed`, `speed`, `exp`, `getpos`, `tphere`, `invsee`, `enderchest`, `seen`, `whois`, `gc`, `bottom`, `tppos`, `tpo`, `tpoffline`, `tpohere`, `tpaall`, `socialspy`, `mute`, `unmute`, `vanish`, `god`, `jail`, `togglejail`, `jailedplayers`, `broadcastworld`, `ext`, `antioch`, `essentials`, `helpop.receive`, `item`, `itemlore`, `itemname`, `repair`, `unlimited`, `hat`, `more`, `book`, `powertool`, `condense`, `skull`, `kittycannon`, `beezooka`, `fireball`, `potion`, `kitreset`, `ice`, `tree`, `bigtree`, `break`, `burn`, `lightning`, `thunder`, `suicide`, `clearinventory`, `clearinventoryconfirmtoggle`, `firework`, `jails`.
+**Op level 2:** `gamemode`, `fly`, `flyspeed`, `heal`, `feed`, `speed`, `exp`, `getpos`, `tphere`, `invsee`, `enderchest`, `seen`, `whois`, `gc`, `bottom`, `tppos`, `tpo`, `tpoffline`, `tpohere`, `tpaall`, `socialspy`, `mute`, `unmute`, `vanish`, `god`, `jail`, `togglejail`, `jailedplayers`, `broadcastworld`, `ext`, `antioch`, `essentials`, `helpop.receive`, `item`, `itemlore`, `itemname`, `repair`, `unlimited`, `hat`, `more`, `book`, `powertool`, `condense`, `skull`, `kittycannon`, `beezooka`, `fireball`, `potion`, `kitreset`, `ice`, `tree`, `bigtree`, `break`, `burn`, `lightning`, `thunder`, `suicide`, `clearinventory`, `clearinventoryconfirmtoggle`, `firework`, `jails`.
 
-**Op nivel 3:** `admin`, `setspawn`, `tpall`, `settpr`, `tempban`, `kickall`, `sudo`, `backup`, `setjail`, `deljail`, `eco`, `setworth`, `createkit`, `delkit`, `remove`, `spawnmob`, `spawner`, `nuke`.
+**Op level 3:** `admin`, `setspawn`, `tpall`, `settpr`, `tempban`, `kickall`, `sudo`, `backup`, `setjail`, `deljail`, `eco`, `setworth`, `createkit`, `delkit`, `remove`, `spawnmob`, `spawner`, `nuke`.
 
+The current groups (`default`, `vip`, `mod`, `owner`, `admin`) already have `pumpkin_essentials:home|warp|tpa|back|admin`, so they keep working. To grant new capabilities, add, for example, `pumpkin_essentials:heal` and `:feed` to `mod` and `pumpkin_essentials:fly` to `vip`, then run `/lp sync`. Targeting another player with `/gm`, `/fly`, `/flyspeed`, `/heal`, `/feed`, or `/enderchest` also requires op level 2; `/tphere` and `/tpall` check op levels 2 and 3 respectively.
 
+## Known limitations
 
-Los grupos actuales (`default`, `vip`, `mod`, `owner`, `admin`) ya tienen `pumpkin_essentials:home|warp|tpa|back|admin`, así que siguen funcionando. Para dar nuevas facultades, añade p. ej. `pumpkin_essentials:heal` y `:feed` a `mod`, `pumpkin_essentials:fly` a `vip`, y ejecuta `/lp sync`. Apuntar a otro jugador con `/gm`, `/fly`, `/flyspeed`, `/heal`, `/feed` o `/enderchest` requiere además nivel de op 2; `/tphere` y `/tpall` comprueban op 2 y 3 respectivamente.
+- VEssentials is not public: its command list was taken from the marketplace; the semantics of `/flyspeed` are documented above.
+- `/invsee` and `/enderchest <player>` show a **read-only copy** because the API allows creating a `Gui` and copying `ItemStack`s, but not linking the GUI directly to another player's inventory. `/enderchest` without a player does open the player's real screen.
+- `/top` uses `World::get_top_block_y(x, z)`; the API does not expose safe-location search (-fluids, ceiling, etc.), so the destination is `y + 1` above the column's highest block.
+- The `[AFK]` tag is applied with `set_tab_list_name`: it may overwrite the tab-list name set by another plugin. The chat announcement remains active.
+- `/back` now persists, but the history is a single location per player (as in PumpkinEssentials).
+- `/tpohere` can only bring **online** players: the WIT API does not expose offline entity manipulation. If the player is offline, the command explains the case and suggests `/tpoffline`; it does not fake success.
+- `/seen`, `/tpoffline`, and `/tpauto` use the data saved by EssentialsPumpkinX in `state.json`, not `usercache.json` or `perms/names.json` (the WASI sandbox only pre-opens the plugin's data folder). Only players who have joined since the plugin was installed appear.
+- `/info` and `/gc` show only what the API exposes: Pumpkin version, TPS/MSPT, CPU, memory, players, and worlds. There is no configurable text page or per-world chunk/entity count as in Bukkit.
+- `/world <name>` goes to the **world spawn** using `get_spawn_location` + `teleport_world`; it does not replicate EssentialsX's Nether/Overworld coordinate scaling.
+- `/msgtoggle`, `/ignore`, `/socialspy`, `/rtoggle`, and `/r` affect only the messaging implemented by this plugin (`/r`, `/mail`). They cannot intercept PumpChat/core `/msg` or `/me` without duplicating those commands; the no-duplicates rule is respected.
+- `/nick` changes `set_tab_list_name`; if another plugin (or `[AFK]`) rewrites that name, it may be overwritten. `/realname` only knows nicknames seen since this plugin was installed.
+- `/tempban` and `/kickall` use the Java/Bedrock kick API (or an error message if the handle is unavailable). The core ban list is not modified: the control is private to `state.json`.
+- `/sudo` runs the command with the target player's `CommandSender`, so their permissions apply; it also blocks dangerous prefixes (`sudo`, `op`, `perms`, `ban`, `backup`, etc.) to prevent escalation.
+- `/backup` copies only this plugin's JSON files to its private `backups/<timestamp>/` folder; it does not back up the world or call `save-all`.
+- `/antioch` computes an approximate point 6 blocks in front of the player and uses `World::create_explosion` with TNT interaction; it does not spawn a real TNT entity.
+- The economy is **independent** of Vault/PVault and other plugins: `/balance`, `/pay`, etc. only read `economy.json`. There is no external bank integration.
+- `/sell` uses `get_registry_key()` and `get_count()`; items without a price in `worth` are not sold and are returned to the inventory. Enchantments and NBT are not distinguished: the price is based only on item key and amount.
+- `/sell` without arguments or with `hand` sells only the item in the selected slot; `all` iterates the 36 inventory slots. The API does not expose direct selling from chests.
+- `/pay` requires confirmation by default (`/payconfirm`); `/payconfirmtoggle` disables it. `/paytoggle` blocks incoming payments. Pending payments are saved in `economy.json` and validated again on confirmation (balance and preferences).
+- There are no interest, taxes, or maximum money limit; amounts are validated as positive and stored as `i64` cents.
+- `/repair` cannot restore durability: WIT 0.1 does not expose `get_damage`/`set_damage` on `item-stack`. The command reports that concrete limitation instead of destroying the item.
+- `/book` gives a `minecraft:writable_book`, but the API does not expose author/title/pages, so they cannot be filled in. `/potion` gives a named potion; NBT effects cannot be set.
+- `/skull` gives a named `minecraft:player_head`: the player profile/texture cannot be assigned with this API.
+- `/spawner` places the `minecraft:spawner` block on the block being looked at (approximated 3 blocks ahead), but the spawner's mob type cannot be stored: WIT offers no block entity NBT for spawners.
+- `/remove` removes all non-player entities in the current world; the type filter is validated but not applied because `get_entities()` does not expose the entity type in a queryable way from the API.
+- `/unlimited` stores the item list and it can be queried/cleared, but the API offers no reliable item-consumption event to restock automatically.
+- `/condense` repacks stacks by item key; recreating `ItemStack`s loses NBT/enchantments. `/kit` stores only id and amount for the same reason.
+- `/fireball`, `/beezooka`, and `/kittycannon` use `spawn_entity` + `set_velocity`; `/beezooka`'s explosion is immediate (there is no 1-second delay as in Bukkit).
+- `/ptime` changes **world** time, not player time: WIT 0.1 does not expose `set_player_time`. `/pweather` is per-player (`set_player_weather`).
+- `/ice` applies `set_freeze_ticks(140)` and zeroes velocity; it is the available/visual equivalent, not a complete movement freeze as in Bukkit.
+- `/tree` and `/bigtree` generate a simplified oak with `set_block_by_name` (trunk + leaves); the API does not expose per-species tree generation.
+- `/editsign` opens the editor on the block approximately 5 blocks ahead; it cannot verify that the block is really a sign, nor edit lines by command.
+- `/nuke` and `/clearinventory` use in-memory confirmation (lost on reload) and persistent `clear_confirm_off`; `/nuke` creates grid explosions, not timed TNT entities.
+- `/break` removes the block without simulating break events or drops; the API does not expose a plugin-invocable block-break event.
 
-## Limitaciones conocidas
+## License and credits
 
-- VEssentials no es público: su lista de comandos se tomó del marketplace; la semántica de `/flyspeed` se documenta arriba.
-- `/invsee` y `/enderchest <jugador>` muestran una **copia de solo lectura** porque la API permite crear un `Gui` y copiar `ItemStack`s, pero no enlazar la GUI directamente al inventario de otro jugador. `/enderchest` sin jugador sí abre la pantalla real del jugador.
-- `/top` usa `World::get_top_block_y(x, z)`; la API no expone búsqueda de ubicación segura (-fluids, techo, etc.), por lo que el destino es `y + 1` sobre el bloque más alto de la columna.
-- El `[AFK]` se aplica con `set_tab_list_name`: puede sobrescribir el nombre de tab-list puesto por otro plugin. El anuncio por chat sigue activo.
-- `/back` ahora persiste, pero el historial es una sola ubicación por jugador (igual que en PumpkinEssentials).
-- `/tpohere` solo puede traer a jugadores **conectados**: la API WIT no expone manipulación de entidades offline. Si el jugador está desconectado, el comando explica el caso y sugiere `/tpoffline`; no finge éxito.
-- `/seen`, `/tpoffline` y `/tpauto` usan los datos guardados por EssentialsFusion en `state.json`, no `usercache.json` ni `perms/names.json` (el sandbox WASI solo preabre la carpeta de datos del plugin). Solo aparecen jugadores que hayan entrado desde que el plugin está instalado.
-- `/info` y `/gc` muestran únicamente lo que expone la API: versión de Pumpkin, TPS/MSPT, CPU, memoria, jugadores y mundos. No hay página de texto configurable ni conteo de chunks/entidades por mundo como en Bukkit.
-- `/world <nombre>` lleva al **spawn del mundo** usando `get_spawn_location` + `teleport_world`; no replica el escalado de coordenadas Nether/Overworld de EssentialsX.
-- `/msgtoggle`, `/ignore`, `/socialspy`, `/rtoggle` y `/r` solo afectan a la mensajería implementada por este plugin (`/r`, `/mail`). No pueden interceptar `/msg` ni `/me` de PumpChat/core sin duplicar esos comandos; se respeta la regla de no duplicados.
-- `/nick` cambia `set_tab_list_name`; si otro plugin (o `[AFK]`) reescribe ese nombre, puede sobrescribirse. `/realname` solo conoce apodos vistos desde que este plugin está instalado.
-- `/tempban` y `/kickall` usan la API de expulsión de Java/Bedrock (o un mensaje de error si el handle no está disponible). No se modifica la lista de baneos del núcleo: el control es propio de `state.json`.
-- `/sudo` ejecuta el comando con el `CommandSender` del jugador objetivo, por lo que se aplican sus permisos; además bloquea prefijos peligrosos (`sudo`, `op`, `perms`, `ban`, `backup`, etc.) para evitar escalado.
-- `/backup` copia únicamente los JSON de este plugin a su carpeta privada `backups/<timestamp>/`; no hace copias del mundo ni llama a `save-all`.
-- `/antioch` calcula un punto aproximado 6 bloques delante del jugador y usa `World::create_explosion` con interacción TNT; no spawna una entidad TNT real.
-- La economía es **independiente** de Vault/PVault y de otros plugins: `/balance`, `/pay`, etc. solo consultan `economy.json`. No hay integración con un banco externo.
-- `/sell` usa `get_registry_key()` y `get_count()`; los objetos sin precio en `worth` no se venden y se devuelven al inventario. No se distinguen encantamientos ni NBT: el precio es únicamente por clave de objeto y cantidad.
-- `/sell` sin argumentos o `hand` vende solo el objeto de la ranura seleccionada; `all` recorre las 36 ranuras del inventario. La API no expone venta directa desde cofres.
-- `/pay` requiere confirmación por defecto (`/payconfirm`); `/payconfirmtoggle` la desactiva. `/paytoggle` bloquea pagos entrantes. Los pagos pendientes se guardan en `economy.json` y se validan de nuevo al confirmar (saldo y preferencias).
-- No hay intereses, impuestos ni límite máximo de dinero; los importes se validan como positivos y se almacenan en céntavos `i64`.
-- `/repair` no puede restaurar durabilidad: la API WIT 0.1 no expone `get_damage`/`set_damage` en `item-stack`. El comando devuelve esa limitación concreta en lugar de destruir el objeto.
-- `/book` entrega un `minecraft:writable_book`, pero la API no expone autor/título/páginas, por lo que no se pueden rellenar. `/potion` entrega una poción con nombre; los efectos NBT no se pueden fijar.
-- `/skull` entrega `minecraft:player_head` con nombre: no se puede asignar el perfil/textura del jugador con esta API.
-- `/spawner` coloca el bloque `minecraft:spawner` en el bloque mirado (aproximado 3 bloques delante), pero el tipo de mob del spawner no se puede guardar: el WIT no ofrece NBT de block entity para spawners.
-- `/remove` elimina todas las entidades no jugador del mundo actual; el filtro por tipo se valida pero no se aplica porque `get_entities()` no expone el tipo de entidad de forma consultable desde la API.
-- `/unlimited` guarda la lista de objetos y se puede consultar/borrar, pero la API no ofrece un evento de consumo de ítem fiable para reponerlos automáticamente.
-- `/condense` reempaqueta montones por clave de objeto; al recrear los `ItemStack` se pierden NBT/encantamientos. `/kit` guarda solo id y cantidad por el mismo motivo.
-- `/fireball`, `/beezooka` y `/kittycannon` usan `spawn_entity` + `set_velocity`; la explosión de `/beezooka` es inmediata (no hay retardo de 1 segundo como en Bukkit).
-- `/ptime` modifica la hora del **mundo**, no del jugador: WIT 0.1 no expone `set_player_time`. `/pweather` sí es por jugador (`set_player_weather`).
-- `/ice` aplica `set_freeze_ticks(140)` y anula la velocidad; es el equivalente visual/disponible, no un congelamiento completo de movimiento como Bukkit.
-- `/tree` y `/bigtree` generan un roble simplificado con `set_block_by_name` (tronco + hojas); la API no expone generación de árboles por especie.
-- `/editsign` abre el editor en el bloque aproximado 5 bloques delante; no se puede comprobar que sea realmente un cartel ni editar líneas por comando.
-- `/nuke` y `/clearinventory` usan confirmación en memoria (se pierde al recargar) y `clear_confirm_off` persistente; `/nuke` crea explosiones en una rejilla, no entidades TNT con temporizador.
-- `/break` elimina el bloque sin simular eventos de rotura ni drops; la API no expone un evento de block-break invocable desde plugin.
+**GPL-3.0** (see `LICENSE-GPL`). This plugin is a derivative work of:
 
-
-
-## Licencia y créditos
-
-**GPL-3.0** (ver `LICENSE-GPL`). Este plugin es un trabajo derivado de:
-
-- [EssentialsX/Essentials](https://github.com/EssentialsX/Essentials) — GPL-3.0. Se adaptaron sus comandos (heal/feed/speed/exp/getpos/spawn/top y, en la iteración 4, ping/playtime/near/seen/whois/info/compass/depth/warpinfo/gc/bottom/tppos/tpr/settpr/tpaall/tpacancel/tpauto/tpo/tpoffline/tpohere/rest/world) a la API de Pumpkin.
-- [DarkTama/pumpkin-plugins](https://github.com/DarkTama/pumpkin-plugins) (`pumpkin-essentials`) — MIT OR Apache-2.0, se conservan `LICENSE-MIT` y `LICENSE-APACHE` con su crédito. El código permissivo puede integrarse en un proyecto GPL-3.0.
-- La API y WIT de [Pumpkin-MC/Pumpkin](https://github.com/Pumpkin-MC/Pumpkin) — MIT OR Apache-2.0.
+- [EssentialsX/Essentials](https://github.com/EssentialsX/Essentials) — GPL-3.0. Its commands (heal/feed/speed/exp/getpos/spawn/top and, in iteration 4, ping/playtime/near/seen/whois/info/compass/depth/warpinfo/gc/bottom/tppos/tpr/settpr/tpaall/tpacancel/tpauto/tpo/tpoffline/tpohere/rest/world) were adapted to Pumpkin's API.
+- [DarkTama/pumpkin-plugins](https://github.com/DarkTama/pumpkin-plugins) (`pumpkin-essentials`) — MIT OR Apache-2.0, with `LICENSE-MIT` and `LICENSE-APACHE` kept and credited. The permissive code can be integrated into a GPL-3.0 project.
+- The API and WIT of [Pumpkin-MC/Pumpkin](https://github.com/Pumpkin-MC/Pumpkin) — MIT OR Apache-2.0.

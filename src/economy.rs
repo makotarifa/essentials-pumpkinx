@@ -1,10 +1,10 @@
-//! Economía propia persistida en `economy.json` (sustituye a Vault/PVault en Pumpkin).
+//! Self-contained economy persisted in `economy.json` (replaces Vault/PVault on Pumpkin).
 //!
-//! Los importes se guardan como enteros en céntimos para evitar errores de coma
-//! flotante. `Economy` implementa el patrón compartido [`FileStore`]
-//! (`crate::store::persist`): `load_economy` solo lee, normaliza formatos
-//! antiguos en memoria (marcando `needs_migration`) y el tick escribe la forma
-//! canónica más tarde.
+//! Amounts are stored as integer cents to avoid floating-point rounding
+//! errors. `Economy` implements the shared [`FileStore`] pattern
+//! (`crate::store::persist`): `load_economy` only reads, normalises legacy
+//! formats in memory (marking `needs_migration`), and the tick writes the
+//! canonical form later.
 
 use crate::store::persist::FileStore;
 use serde::{Deserialize, Serialize};
@@ -28,15 +28,15 @@ pub struct PendingPay {
 pub struct Economy {
     #[serde(default = "schema")]
     pub schema: u32,
-    /// UUID -> saldo en céntavos (nunca negativo).
+    /// UUID -> balance in cents (never negative).
     pub balances: BTreeMap<String, i64>,
-    /// clave de item (minecraft:stone) -> precio por unidad en céntavos.
+    /// item key (minecraft:stone) -> price per unit in cents.
     pub worth: BTreeMap<String, i64>,
-    /// UUID -> true si NO acepta pagos.
+    /// UUID -> true if payments are DISABLED.
     pub pay_off: BTreeMap<String, bool>,
-    /// UUID -> true si NO quiere confirmación al pagar.
+    /// UUID -> true if no confirmation is wanted when paying.
     pub payconfirm_off: BTreeMap<String, bool>,
-    /// UUID -> último pago pendiente de confirmación.
+    /// UUID -> last payment awaiting confirmation.
     pub pending_pay: BTreeMap<String, PendingPay>,
     #[serde(skip)]
     pub needs_migration: bool,
@@ -164,10 +164,10 @@ mod tests {
     use std::path::PathBuf;
 
     fn tmpdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("fusion-economy-test-{tag}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        fs::create_dir_all(&d).unwrap();
-        d
+        let dir = std::env::temp_dir().join(format!("pumpkinx-economy-test-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     #[test]
@@ -188,29 +188,29 @@ mod tests {
 
     #[test]
     fn economy_never_negative() {
-        let mut e = Economy::default();
-        assert_eq!(balance_of(&e, "a"), 0);
-        assert_eq!(adjust(&mut e, "a", 500), Ok(()));
-        assert_eq!(adjust(&mut e, "a", -200), Ok(()));
-        assert_eq!(balance_of(&e, "a"), 300);
-        assert!(adjust(&mut e, "a", -400).is_err());
-        assert_eq!(balance_of(&e, "a"), 300);
-        assert!(set_balance(&mut e, "a", -1).is_err());
-        assert_eq!(transfer(&mut e, "a", "b", 100), Ok(()));
-        assert_eq!((balance_of(&e, "a"), balance_of(&e, "b")), (200, 100));
-        assert!(transfer(&mut e, "a", "b", 500).is_err());
+        let mut economy = Economy::default();
+        assert_eq!(balance_of(&economy, "a"), 0);
+        assert_eq!(adjust(&mut economy, "a", 500), Ok(()));
+        assert_eq!(adjust(&mut economy, "a", -200), Ok(()));
+        assert_eq!(balance_of(&economy, "a"), 300);
+        assert!(adjust(&mut economy, "a", -400).is_err());
+        assert_eq!(balance_of(&economy, "a"), 300);
+        assert!(set_balance(&mut economy, "a", -1).is_err());
+        assert_eq!(transfer(&mut economy, "a", "b", 100), Ok(()));
+        assert_eq!((balance_of(&economy, "a"), balance_of(&economy, "b")), (200, 100));
+        assert!(transfer(&mut economy, "a", "b", 500).is_err());
     }
 
     #[test]
     fn payment_confirmation_flow() {
-        let mut e = Economy::default();
-        set_balance(&mut e, "a", 1000).unwrap();
-        e.pending_pay.insert("a".into(), PendingPay { to_uuid: "b".into(), to_name: "Bob".into(), amount: 250, at_ms: 1 });
-        let pending = e.pending_pay.remove("a").unwrap();
-        assert_eq!(transfer(&mut e, &"a".to_string(), &pending.to_uuid, pending.amount), Ok(()));
-        assert_eq!(balance_of(&e, "a"), 750);
-        assert_eq!(balance_of(&e, "b"), 250);
-        assert!(e.pending_pay.get("a").is_none());
+        let mut economy = Economy::default();
+        set_balance(&mut economy, "a", 1000).unwrap();
+        economy.pending_pay.insert("a".into(), PendingPay { to_uuid: "b".into(), to_name: "Bob".into(), amount: 250, at_ms: 1 });
+        let pending = economy.pending_pay.remove("a").unwrap();
+        assert_eq!(transfer(&mut economy, &"a".to_string(), &pending.to_uuid, pending.amount), Ok(()));
+        assert_eq!(balance_of(&economy, "a"), 750);
+        assert_eq!(balance_of(&economy, "b"), 250);
+        assert!(economy.pending_pay.get("a").is_none());
     }
 
     #[test]
@@ -219,12 +219,12 @@ mod tests {
         let p = d.join("economy.json");
         let original = r#"{"economy":{"schema":0,"balances":{"a":123}}}"#;
         fs::write(&p, original).unwrap();
-        let e = load_economy(&p).unwrap();
-        assert!(e.needs_migration);
-        assert_eq!(e.schema, schema());
-        assert_eq!(balance_of(&e, "a"), 123);
+        let economy = load_economy(&p).unwrap();
+        assert!(economy.needs_migration);
+        assert_eq!(economy.schema, schema());
+        assert_eq!(balance_of(&economy, "a"), 123);
         assert_eq!(fs::read_to_string(&p).unwrap(), original);
-        save_economy(&p, &e).unwrap();
+        save_economy(&p, &economy).unwrap();
         let after = load_economy(&p).unwrap();
         assert!(!after.needs_migration);
         let _ = fs::remove_dir_all(d);

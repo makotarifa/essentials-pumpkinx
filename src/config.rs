@@ -41,15 +41,15 @@ pub struct Config {
     pub tpr_max_range: f64,
     pub tpr_attempts: u32,
     pub tpr: BTreeMap<String, TprArea>,
-    /// Textos mostrados por /customtext <clave>.
+    /// Texts shown by /customtext <key>.
     pub custom_texts: BTreeMap<String, Vec<String>>,
-    /// Reglas mostradas por /rules.
+    /// Rules shown by /rules.
     pub rules: Vec<String>,
-    /// Cárceles definidas con /setjail.
+    /// Jails defined with /setjail.
     pub jails: BTreeMap<String, Location>,
-    /// Símbolo usado por /balance, /pay, etc.
+    /// Symbol used by /balance, /pay, etc.
     pub currency_symbol: String,
-    /// Decimales mostrados (los importes internos están en céntavos fijos).
+    /// Displayed decimals (internal amounts are fixed cents).
     pub currency_decimals: u8,
 }
 
@@ -117,40 +117,40 @@ mod tests {
 
     #[test]
     fn defaults_match_spec() {
-        let c = Config::default();
-        assert_eq!((c.default_max_homes, c.warmup_secs, c.cooldown_secs), (3, 3, 30));
-        assert_eq!(c.tpa_expire_secs, 60);
-        assert_eq!(c.flyspeed_unit, 0.05);
-        assert_eq!(c.near_max_radius, 200);
-        assert_eq!((c.tpr_min_range, c.tpr_max_range, c.tpr_attempts), (50.0, 1000.0, 24));
-        assert!(c.tpr.is_empty());
+        let config = Config::default();
+        assert_eq!((config.default_max_homes, config.warmup_secs, config.cooldown_secs), (3, 3, 30));
+        assert_eq!(config.tpa_expire_secs, 60);
+        assert_eq!(config.flyspeed_unit, 0.05);
+        assert_eq!(config.near_max_radius, 200);
+        assert_eq!((config.tpr_min_range, config.tpr_max_range, config.tpr_attempts), (50.0, 1000.0, 24));
+        assert!(config.tpr.is_empty());
     }
 
     #[test]
     fn legacy_json_fills_new_defaults() {
-        let c = Config::from_json(
+        let config = Config::from_json(
             r#"{"default_max_homes":3,"ops_bypass_home_limit":false,"warmup_secs":3,"cooldown_secs":30,"tpa_expire_secs":60}"#,
         )
         .unwrap();
-        assert_eq!(c, Config::default());
+        assert_eq!(config, Config::default());
     }
 
     #[test]
     fn partial_json_fills_defaults() {
-        let c = Config::from_json(r#"{"warmup_secs": 0}"#).unwrap();
-        assert_eq!(c.warmup_secs, 0);
-        assert_eq!(c.cooldown_secs, 30);
+        let config = Config::from_json(r#"{"warmup_secs": 0}"#).unwrap();
+        assert_eq!(config.warmup_secs, 0);
+        assert_eq!(config.cooldown_secs, 30);
     }
 
     #[test]
     fn spawn_and_tpr_roundtrip() {
-        let mut c = Config::default();
-        c.spawns.insert(
+        let mut config = Config::default();
+        config.spawns.insert(
             "world".into(),
             Location { world: "world".into(), x: 1.5, y: 64.0, z: -2.5, yaw: 90.0, pitch: 0.0 },
         );
-        c.tpr.insert("world".into(), TprArea { center: None, min_range: Some(10.0), max_range: None });
-        let text = c.to_json();
-        assert_eq!(Config::from_json(&text).unwrap(), c);
+        config.tpr.insert("world".into(), TprArea { center: None, min_range: Some(10.0), max_range: None });
+        let text = config.to_json();
+        assert_eq!(Config::from_json(&text).unwrap(), config);
     }
 }

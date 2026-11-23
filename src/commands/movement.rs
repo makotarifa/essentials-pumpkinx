@@ -1,7 +1,3 @@
-//! Movimiento y teletransportes: /back, /spawn, /setspawn, /top, /bottom,
-//! /tppos, /tpr, /settpr, /tpo, /tpoffline, /tpohere, /tphere, /tpall,
-//! /world, /jump, /fly y /flyspeed.
-
 use crate::{
     cmdutil::{
         fail, forward, greedy_arg, greedy_node, has_level, need_op, no_arg, one_arg, optional_target, player_of, plain, reg,
@@ -23,18 +19,16 @@ use pumpkin_plugin_api::{
 };
 use tracing::info;
 
-// ---- back / spawn / top ----------------------------------------------------------
-
 struct BackCmd;
 impl CommandHandler for BackCmd {
     fn handle(&self, sender: CommandSender, server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let key = host::key_of(&p);
-        let dest = with_state(|s| s.backs.get(key).cloned())
+        let player = player_of(&sender)?;
+        let key = host::key_of(&player);
+        let dest = with_state(|state| state.backs.get(key).cloned())
             .ok_or_else(unavailable)?
             .ok_or_else(|| fail("No hay una ubicación anterior a la que volver."))?;
-        info!("essentials: {} /back", p.get_name());
-        super::start_teleport(&server, &p, dest, "tu ubicación anterior".into(), TpKind::Back);
+        info!("essentials: {} /back", player.get_name());
+        super::start_teleport(&server, &player, dest, "tu ubicación anterior".into(), TpKind::Back);
         Ok(1)
     }
 }
@@ -42,8 +36,8 @@ impl CommandHandler for BackCmd {
 struct SpawnCmd;
 impl CommandHandler for SpawnCmd {
     fn handle(&self, sender: CommandSender, server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let world = p.get_world();
+        let player = player_of(&sender)?;
+        let world = player.get_world();
         let world_name = world.get_name();
         let spawn = world.get_spawn_location();
         let fallback = Location {
@@ -54,11 +48,11 @@ impl CommandHandler for SpawnCmd {
             yaw: spawn.yaw,
             pitch: spawn.pitch,
         };
-        let dest = with_state(|s| s.cfg.spawns.get(&world_name).cloned())
+        let dest = with_state(|state| state.cfg.spawns.get(&world_name).cloned())
             .ok_or_else(unavailable)?
             .unwrap_or(fallback);
-        info!("essentials: {} /spawn", p.get_name());
-        super::start_teleport(&server, &p, dest, "el spawn".into(), TpKind::Spawn);
+        info!("essentials: {} /spawn", player.get_name());
+        super::start_teleport(&server, &player, dest, "el spawn".into(), TpKind::Spawn);
         Ok(1)
     }
 }
@@ -67,16 +61,16 @@ struct SetSpawnCmd;
 impl CommandHandler for SetSpawnCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
         need_op(&sender)?;
-        let p = player_of(&sender)?;
-        let loc = host::location_of(&p);
+        let player = player_of(&sender)?;
+        let loc = host::location_of(&player);
         with_state(|s| {
             s.cfg.spawns.insert(loc.world.clone(), loc.clone());
             super::save_cfg(s)
         })
         .ok_or_else(unavailable)?
-        .map_err(|e| fail(&e))?;
-        host::ok(&p, &format!("Spawn de '{}' fijado en tu posición.", loc.world));
-        info!("essentials: {} /setspawn in {}", p.get_name(), loc.world);
+        .map_err(|error| fail(&error))?;
+        host::ok(&player, &format!("Spawn de '{}' fijado en tu posición.", loc.world));
+        info!("essentials: {} /setspawn in {}", player.get_name(), loc.world);
         Ok(1)
     }
 }
@@ -110,8 +104,6 @@ impl CommandHandler for TopCmd {
         Ok(1)
     }
 }
-
-// ---- teleportes de staff ---------------------------------------------------------
 
 struct TpHereCmd;
 impl CommandHandler for TpHereCmd {
@@ -153,31 +145,29 @@ impl CommandHandler for TpAllCmd {
     }
 }
 
-// ---- teleportes avanzados (iteración 4) ------------------------------------------
-
 struct BottomCmd {
     target: bool,
 }
 impl CommandHandler for BottomCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let me = player_of(&sender)?;
-        let p = if self.target {
+        let player = if self.target {
             crate::cmdutil::target_of(&sender, &server, &me, &args, CmdLevel::Two)?
         } else {
             me
         };
-        let (x, _, z) = p.get_position();
-        let world = p.get_world();
+        let (x, _, z) = player.get_position();
+        let world = player.get_world();
         let bottom = world.get_min_y() + 1;
         let dest = Location {
             world: world.get_name(),
             x: x.floor() + 0.5,
             y: bottom as f64,
             z: z.floor() + 0.5,
-            yaw: p.get_yaw(),
-            pitch: p.get_pitch(),
+            yaw: player.get_yaw(),
+            pitch: player.get_pitch(),
         };
-        super::start_teleport(&server, &p, dest, "el fondo".into(), TpKind::Bottom);
+        super::start_teleport(&server, &player, dest, "el fondo".into(), TpKind::Bottom);
         Ok(1)
     }
 }
@@ -185,16 +175,16 @@ impl CommandHandler for BottomCmd {
 struct TpPosCmd;
 impl CommandHandler for TpPosCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.len() < 3 {
             return Err(fail("Uso: /tppos <x> <y> <z> [yaw] [pitch] [mundo]"));
         }
-        let (px, py, pz) = p.get_position();
-        let x = extras::parse_tp_coord(tokens[0], px).map_err(|e| fail(&e))?;
-        let y = extras::parse_tp_coord(tokens[1], py).map_err(|e| fail(&e))?;
-        let z = extras::parse_tp_coord(tokens[2], pz).map_err(|e| fail(&e))?;
+        let (px, py, pz) = player.get_position();
+        let x = extras::parse_tp_coord(tokens[0], px).map_err(|error| fail(&error))?;
+        let y = extras::parse_tp_coord(tokens[1], py).map_err(|error| fail(&error))?;
+        let z = extras::parse_tp_coord(tokens[2], pz).map_err(|error| fail(&error))?;
         let mut idx = 3;
         let (yaw, pitch) = if tokens.len() >= idx + 2 {
             match (tokens[idx].parse::<f32>(), tokens[idx + 1].parse::<f32>()) {
@@ -202,18 +192,18 @@ impl CommandHandler for TpPosCmd {
                     idx += 2;
                     (a, b)
                 }
-                _ => (p.get_yaw(), p.get_pitch()),
+                _ => (player.get_yaw(), player.get_pitch()),
             }
         } else {
-            (p.get_yaw(), p.get_pitch())
+            (player.get_yaw(), player.get_pitch())
         };
         let world_name = tokens[idx..].join(" ");
-        let world = if world_name.is_empty() { p.get_world().get_name() } else { world_name };
+        let world = if world_name.is_empty() { player.get_world().get_name() } else { world_name };
         if server.get_world_by_name(&world).is_none() {
             return Err(fail(&format!("Mundo '{world}' no existe.")));
         }
         let dest = Location { world, x, y, z, yaw, pitch };
-        super::complete_teleport(&server, &p, host::key_of(&p), &dest, "tppos", TpKind::Tppos);
+        super::complete_teleport(&server, &player, host::key_of(&player), &dest, "tppos", TpKind::Tppos);
         Ok(1)
     }
 }
@@ -300,7 +290,7 @@ impl CommandHandler for SetTprCmd {
         if !has_level(&sender, CmdLevel::Three) {
             return Err(CommandError::PermissionDenied);
         }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         if tokens.len() < 2 {
@@ -311,7 +301,7 @@ impl CommandHandler for SetTprCmd {
         match mode.as_str() {
             "center" => {
                 with_state(|s| {
-                    s.cfg.tpr.entry(tokens[0].to_string()).or_default().center = Some(host::location_of(&p));
+                    s.cfg.tpr.entry(tokens[0].to_string()).or_default().center = Some(host::location_of(&player));
                     saved = super::save_cfg(s);
                 })
                 .ok_or_else(unavailable)?;
@@ -335,7 +325,7 @@ impl CommandHandler for SetTprCmd {
             }
             _ => return Err(fail("Usa center, minrange o maxrange.")),
         }
-        saved.map_err(|e| fail(&e))?;
+        saved.map_err(|error| fail(&error))?;
         say(&sender, &format!("Zona /tpr de '{}' actualizada ({}).", tokens[0], mode));
         Ok(1)
     }
@@ -371,7 +361,7 @@ impl CommandHandler for TpoCmd {
 struct TpOfflineCmd;
 impl CommandHandler for TpOfflineCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let name = plain(args.get_value("player"));
         if server.get_player_by_name(&name).is_some() {
             return Err(fail("Ese jugador está conectado; usa /tpo."));
@@ -382,7 +372,7 @@ impl CommandHandler for TpOfflineCmd {
         })
         .ok_or_else(unavailable)?
         .ok_or_else(|| fail(&format!("No hay última ubicación guardada de '{name}'.")))?;
-        super::start_teleport(&server, &p, loc, format!("la última ubicación de {name}"), TpKind::Tpoffline);
+        super::start_teleport(&server, &player, loc, format!("la última ubicación de {name}"), TpKind::Tpoffline);
         Ok(1)
     }
 }
@@ -403,7 +393,7 @@ impl CommandHandler for TpOHereCmd {
 struct WorldCmd;
 impl CommandHandler for WorldCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         if raw.trim().is_empty() {
             let list = server
@@ -428,32 +418,28 @@ impl CommandHandler for WorldCmd {
             pitch: sp.pitch,
         };
         let label = format!("el mundo {}", dest.world);
-        super::start_teleport(&server, &p, dest, label, TpKind::World);
+        super::start_teleport(&server, &player, dest, label, TpKind::World);
         Ok(1)
     }
 }
-
-// ---- salto (iteración 8) ---------------------------------------------------------
 
 struct JumpCmd;
 impl CommandHandler for JumpCmd {
     fn handle(&self, sender: CommandSender, server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let (x, y, z) = forward(&p, 3.0);
+        let player = player_of(&sender)?;
+        let (x, y, z) = forward(&player, 3.0);
         let dest = Location {
-            world: p.get_world().get_name(),
+            world: player.get_world().get_name(),
             x: x.floor() + 0.5,
             y: y + 1.0,
             z: z.floor() + 0.5,
-            yaw: p.get_yaw(),
-            pitch: p.get_pitch(),
+            yaw: player.get_yaw(),
+            pitch: player.get_pitch(),
         };
-        super::start_teleport(&server, &p, dest, "salto".into(), TpKind::Jump);
+        super::start_teleport(&server, &player, dest, "salto".into(), TpKind::Jump);
         Ok(1)
     }
 }
-
-// ---- vuelo -----------------------------------------------------------------------
 
 struct FlyCmd {
     target: bool,
@@ -503,12 +489,12 @@ impl CommandHandler for FlySpeedCmd {
         } else {
             return Err(fail("Uso: /flyspeed [jugador] <0.0-10.0>"));
         };
-        let value = extras::parse_fly_speed(speed_raw).map_err(|e| fail(&e))?;
+        let value = extras::parse_fly_speed(speed_raw).map_err(|error| fail(&error))?;
         let target = match target_name {
             Some(name) => resolve_target(&sender, &server, &me, name)?,
             None => me,
         };
-        let unit = with_state(|s| s.cfg.flyspeed_unit).ok_or_else(unavailable)?;
+        let unit = with_state(|state| state.cfg.flyspeed_unit).ok_or_else(unavailable)?;
         let engine_speed = extras::engine_fly_speed(value, unit);
         target.set_fly_speed(engine_speed);
         let speed_now = target.get_abilities().fly_speed;

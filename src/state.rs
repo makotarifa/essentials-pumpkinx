@@ -76,7 +76,6 @@ pub struct PersistedState {
     pub last_location: BTreeMap<String, Location>,
     pub tpa_auto: BTreeMap<String, bool>,
     pub names: BTreeMap<String, String>,
-    // --- iteración 5 ---
     pub msg_off: BTreeMap<String, bool>,
     pub social_spy: BTreeMap<String, bool>,
     pub ignored: BTreeMap<String, Vec<String>>,
@@ -89,7 +88,7 @@ pub struct PersistedState {
     pub vanished: BTreeMap<String, bool>,
     pub god: BTreeMap<String, bool>,
     pub jailed: BTreeMap<String, JailRecord>,
-    /// Iteración 8: true = no pedir confirmación en /clearinventory y /nuke.
+    /// Iteration 8: true = do not ask for confirmation in /clearinventory and /nuke.
     pub clear_confirm_off: BTreeMap<String, bool>,
     /// Set by `load_state` when a legacy shape was normalised; never serialised.
     #[serde(skip)]
@@ -176,10 +175,10 @@ mod tests {
     use std::path::PathBuf;
 
     fn tmpdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("fusion-state-test-{tag}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        fs::create_dir_all(&d).unwrap();
-        d
+        let dir = std::env::temp_dir().join(format!("pumpkinx-state-test-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     fn loc() -> Location {
@@ -201,29 +200,29 @@ mod tests {
     fn roundtrip_all_sections() {
         let d = tmpdir("roundtrip");
         let p = d.join("state.json");
-        let mut s = PersistedState::default();
-        s.back.insert("u".into(), loc());
-        s.fly.insert("u".into(), FlyState { allow_flying: true, flying: true, fly_speed: 0.25 });
-        s.afk.insert("u".into(), AfkState { active: true, reason: "dinner".into(), since_ms: 123 });
-        s.tpa_off.insert("u".into(), true);
-        s.playtime_ms.insert("u".into(), 3_600_000);
-        s.names.insert("u".into(), "Alex".into());
-        s.msg_off.insert("u".into(), true);
-        s.social_spy.insert("u".into(), true);
-        s.ignored.insert("u".into(), vec!["v".into()]);
-        s.nicks.insert("u".into(), "Nick".into());
-        s.reply_target.insert("u".into(), "v".into());
-        s.rtoggle.insert("u".into(), false);
-        s.mail.insert("v".into(), vec![MailMessage { from: "u".into(), from_uuid: "u".into(), body: "hi".into(), time_ms: 1, read: false }]);
-        s.mutes.insert("u".into(), ModRecord { until_ms: 2, reason: "spam".into(), by: "op".into() });
-        s.bans.insert("u".into(), ModRecord { until_ms: 3, reason: "bad".into(), by: "op".into() });
-        s.vanished.insert("u".into(), true);
-        s.god.insert("u".into(), true);
-        s.jailed.insert("u".into(), JailRecord { jail: "main".into(), until_ms: 4, by: "mod".into() });
-        s.clear_confirm_off.insert("u".into(), true);
-        save_state(&p, &s).unwrap();
+        let mut state = PersistedState::default();
+        state.back.insert("u".into(), loc());
+        state.fly.insert("u".into(), FlyState { allow_flying: true, flying: true, fly_speed: 0.25 });
+        state.afk.insert("u".into(), AfkState { active: true, reason: "dinner".into(), since_ms: 123 });
+        state.tpa_off.insert("u".into(), true);
+        state.playtime_ms.insert("u".into(), 3_600_000);
+        state.names.insert("u".into(), "Alex".into());
+        state.msg_off.insert("u".into(), true);
+        state.social_spy.insert("u".into(), true);
+        state.ignored.insert("u".into(), vec!["v".into()]);
+        state.nicks.insert("u".into(), "Nick".into());
+        state.reply_target.insert("u".into(), "v".into());
+        state.rtoggle.insert("u".into(), false);
+        state.mail.insert("v".into(), vec![MailMessage { from: "u".into(), from_uuid: "u".into(), body: "hi".into(), time_ms: 1, read: false }]);
+        state.mutes.insert("u".into(), ModRecord { until_ms: 2, reason: "spam".into(), by: "op".into() });
+        state.bans.insert("u".into(), ModRecord { until_ms: 3, reason: "bad".into(), by: "op".into() });
+        state.vanished.insert("u".into(), true);
+        state.god.insert("u".into(), true);
+        state.jailed.insert("u".into(), JailRecord { jail: "main".into(), until_ms: 4, by: "mod".into() });
+        state.clear_confirm_off.insert("u".into(), true);
+        save_state(&p, &state).unwrap();
         let loaded = load_state(&p).unwrap();
-        assert_eq!(loaded, s);
+        assert_eq!(loaded, state);
         assert!(!loaded.needs_migration);
         assert!(!d.join("state.json.tmp").exists());
         let _ = fs::remove_dir_all(d);
@@ -235,9 +234,9 @@ mod tests {
         let p = d.join("state.json");
         let original = r#"{"state":{"schema":1,"back":{"u":{"world":"world","x":1.0,"y":64.0,"z":2.0,"yaw":0.0,"pitch":0.0}}}}"#;
         fs::write(&p, original).unwrap();
-        let s = load_state(&p).unwrap();
-        assert!(s.needs_migration);
-        assert_eq!(s.back["u"], loc());
+        let state = load_state(&p).unwrap();
+        assert!(state.needs_migration);
+        assert_eq!(state.back["u"], loc());
         // The load must not touch the file (no blocking write during startup).
         assert_eq!(fs::read_to_string(&p).unwrap(), original);
         let _ = fs::remove_dir_all(d);
@@ -249,13 +248,13 @@ mod tests {
         let p = d.join("state.json");
         let original = r#"{"schema":1,"names":{"u":"Alex"}}"#;
         fs::write(&p, original).unwrap();
-        let s = load_state(&p).unwrap();
-        assert!(s.needs_migration);
-        assert_eq!(s.schema, schema());
-        assert!(s.mutes.is_empty() && s.mail.is_empty());
+        let state = load_state(&p).unwrap();
+        assert!(state.needs_migration);
+        assert_eq!(state.schema, schema());
+        assert!(state.mutes.is_empty() && state.mail.is_empty());
         assert_eq!(fs::read_to_string(&p).unwrap(), original);
         // A deferred write produces the canonical current schema.
-        save_state(&p, &s).unwrap();
+        save_state(&p, &state).unwrap();
         let after = load_state(&p).unwrap();
         assert_eq!(after.schema, schema());
         assert!(!after.needs_migration);
@@ -266,9 +265,9 @@ mod tests {
     fn dirty_flag_never_reaches_disk() {
         let d = tmpdir("dirty");
         let p = d.join("state.json");
-        let mut s = PersistedState::default();
-        s.dirty = true;
-        save_state(&p, &s).unwrap();
+        let mut state = PersistedState::default();
+        state.dirty = true;
+        save_state(&p, &state).unwrap();
         assert!(!load_state(&p).unwrap().dirty);
         let _ = fs::remove_dir_all(d);
     }

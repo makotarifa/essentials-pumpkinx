@@ -14,7 +14,6 @@ use pumpkin_plugin_api::{Player, Server, World, text::TextComponent, uuid::Uuid}
 
 /// The world surface used by `host.rs` (identification, teleport targeting).
 pub trait HostWorld {
-    /// The world's name.
     fn name(&self) -> String;
 }
 
@@ -29,15 +28,11 @@ pub trait HostPlayer {
     /// The world-handle type this player can be teleported within/between.
     type World: HostWorld;
 
-    /// The player's unique id.
     fn id(&self) -> Uuid;
-    /// The underlying entity id.
     fn entity_id(&self) -> i32;
-    /// The player's current position.
     fn position(&self) -> (f64, f64, f64);
     /// The player's current (yaw, pitch).
     fn rotation(&self) -> (f32, f32);
-    /// The name of the world the player is currently in.
     fn world_name(&self) -> String;
     /// Send a system chat message (the plugin always uses overlay=false).
     fn send_system_message(&self, text: TextComponent);
@@ -72,8 +67,8 @@ impl HostPlayer for Player {
         self.get_position()
     }
     fn rotation(&self) -> (f32, f32) {
-        let e = self.as_entity();
-        (e.get_yaw(), e.get_pitch())
+        let entity = self.as_entity();
+        (entity.get_yaw(), entity.get_pitch())
     }
     fn world_name(&self) -> String {
         self.get_world().name()
@@ -105,7 +100,6 @@ impl HostPlayer for Player {
 pub trait HostServer {
     type World: HostWorld;
 
-    /// Look up a world by name.
     fn world_by_name(&self, name: &str) -> Option<Self::World>;
 }
 

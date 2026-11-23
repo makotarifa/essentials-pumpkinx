@@ -303,10 +303,10 @@ mod tests {
     fn random_and_name_lookup() {
         assert_eq!(random_offset(100.0, 0), 0.0);
         assert!(random_offset(100.0, 123_456) < 100.0);
-        let mut s = PersistedState::default();
-        s.names.insert("uuid-1".into(), "Alex".into());
-        assert_eq!(find_uuid_by_name(&s, "alex").as_deref(), Some("uuid-1"));
-        assert!(find_uuid_by_name(&s, "nobody").is_none());
+        let mut state = PersistedState::default();
+        state.names.insert("uuid-1".into(), "Alex".into());
+        assert_eq!(find_uuid_by_name(&state, "alex").as_deref(), Some("uuid-1"));
+        assert!(find_uuid_by_name(&state, "nobody").is_none());
     }
     #[test]
     fn random_point_in_annulus() {

@@ -1,5 +1,3 @@
-//! Casas: /sethome, /home, /delhome, /homes, /renamehome y /sethomelimit.
-
 use crate::{
     cmdutil::{button, fail, is_op, name_arg, name_arg_or, need_op, no_arg, plain, player_of, reg, unavailable, word, CmdResult},
     host::{self, State, with_state},
@@ -17,14 +15,14 @@ use pumpkin_plugin_api::{
 use tracing::info;
 
 /// Mutate homes.json atomically: edit a copy, save it, then commit it to memory.
-fn mutate_homes<R>(s: &mut State, f: impl FnOnce(&mut store::HomesFile) -> R) -> Result<R, String> {
-    let mut copy = s.homes.clone();
+fn mutate_homes<R>(state: &mut State, f: impl FnOnce(&mut store::HomesFile) -> R) -> Result<R, String> {
+    let mut copy = state.homes.clone();
     let r = f(&mut copy);
-    store::save_json(&s.homes_path(), &copy).map_err(|e| {
+    store::save_json(&state.homes_path(), &copy).map_err(|e| {
         tracing::error!("essentials: could not save homes.json: {e}");
         "No se pudieron guardar los datos; el cambio NO se aplicó.".to_string()
     })?;
-    s.homes = copy;
+    state.homes = copy;
     Ok(r)
 }
 

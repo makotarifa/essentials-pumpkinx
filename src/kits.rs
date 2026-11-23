@@ -1,8 +1,8 @@
-//! Kits, cooldowns, powertools y objetos ilimitados en `kits.json`.
+//! Kits, cooldowns, powertools and unlimited items in `kits.json`.
 //!
-//! `Kits` implementa el patrón compartido [`FileStore`] (`crate::store::persist`):
-//! carga de solo lectura, formatos legacy normalizados en memoria y escritura
-//! diferida en el primer tick (mismo patrón que state/economy).
+//! `Kits` implements the shared [`FileStore`] pattern (`crate::store::persist`):
+//! read-only load, legacy formats normalised in memory and writes deferred
+//! to the first tick (same pattern as state/economy).
 
 use crate::store::persist::FileStore;
 use serde::{Deserialize, Serialize};
@@ -38,13 +38,13 @@ pub struct Kits {
     #[serde(default = "schema")]
     pub schema: u32,
     pub kits: BTreeMap<String, Kit>,
-    /// "<uuid>|<kit>" -> Unix ms de caducidad del cooldown.
+    /// "<uuid>|<kit>" -> Unix ms when the cooldown expires.
     pub cooldowns: BTreeMap<String, u64>,
-    /// UUID -> (clave de objeto -> comandos).
+    /// UUID -> (item key -> commands).
     pub powertools: BTreeMap<String, BTreeMap<String, Vec<String>>>,
-    /// UUID -> powertools activados.
+    /// UUID -> powertools enabled.
     pub powertool_toggle: BTreeMap<String, bool>,
-    /// UUID -> claves de objetos ilimitados.
+    /// UUID -> unlimited item keys.
     pub unlimited: BTreeMap<String, Vec<String>>,
     #[serde(skip)]
     pub needs_migration: bool,
@@ -128,10 +128,10 @@ mod tests {
     use std::path::PathBuf;
 
     fn tmpdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("fusion-kits-test-{tag}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        fs::create_dir_all(&d).unwrap();
-        d
+        let dir = std::env::temp_dir().join(format!("pumpkinx-kits-test-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     #[test]

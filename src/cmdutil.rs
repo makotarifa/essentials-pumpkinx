@@ -61,8 +61,6 @@ pub fn need_op(sender: &CommandSender) -> Result<(), CommandError> {
     if is_op(sender) { Ok(()) } else { Err(CommandError::PermissionDenied) }
 }
 
-// ---- node and command builders ---------------------------------------------------
-
 pub fn word(name: &str) -> CommandNode {
     CommandNode::argument(name, &ArgumentType::String(StringType::SingleWord))
 }
@@ -72,7 +70,7 @@ pub fn greedy_node(name: &str) -> CommandNode {
 }
 
 pub fn one_arg<H: CommandHandler + 'static>(names: &[&str], desc: &str, arg: &str, h: H) -> Command {
-    let names: Vec<String> = names.iter().map(|s| s.to_string()).collect();
+    let names: Vec<String> = names.iter().map(|name| name.to_string()).collect();
     Command::new(&names, desc).then(word(arg).execute(h))
 }
 
@@ -91,19 +89,15 @@ pub fn reg(ctx: &Context, command: Command, permission: &str) -> Result<(), Stri
     Ok(())
 }
 
-// ---- argument decoding -----------------------------------------------------------
-
 pub fn name_arg(args: &ConsumedArgs) -> Result<String, CommandError> {
-    logic::validate_name(&plain(args.get_value("name"))).map_err(|e| fail(e.message()))
+    logic::validate_name(&plain(args.get_value("name"))).map_err(|error| fail(error.message()))
 }
 
 pub fn name_arg_or(args: &ConsumedArgs, default: &str) -> Result<String, CommandError> {
     let raw = plain(args.get_value("name"));
     let chosen = if raw.trim().is_empty() { default } else { &raw };
-    logic::validate_name(chosen).map_err(|e| fail(e.message()))
+    logic::validate_name(chosen).map_err(|error| fail(error.message()))
 }
-
-// ---- target resolution -----------------------------------------------------------
 
 /// A command node granted to ops may target another player only at gamemaster level.
 pub fn resolve_target(sender: &CommandSender, server: &Server, me: &Player, name: &str) -> Result<Player, CommandError> {
@@ -145,32 +139,30 @@ pub fn target_from_name(sender: &CommandSender, server: &Server, me: &Player, na
     Ok(target)
 }
 
-// ---- small shared utilities ------------------------------------------------------
-
 /// Interpret an optional on/off token; toggling when absent or unrecognized.
 pub fn parse_mode_arg(raw: Option<&str>, current: bool) -> bool {
-    match raw.map(|s| s.to_ascii_lowercase()) {
-        Some(s) if s == "on" || s == "true" => true,
-        Some(s) if s == "off" || s == "false" => false,
+    match raw.map(|token| token.to_ascii_lowercase()) {
+        Some(token) if token == "on" || token == "true" => true,
+        Some(token) if token == "off" || token == "false" => false,
         _ => !current,
     }
 }
 
-pub fn uuid_of(p: &Player) -> String {
-    logic::uuid_string(host::key_of(p))
+pub fn uuid_of(player: &Player) -> String {
+    logic::uuid_string(host::key_of(player))
 }
 
 /// UUID string of an online or known offline player, if we have any record.
 pub fn uuid_by_name(server: &Server, name: &str) -> Option<String> {
-    if let Some(p) = server.get_player_by_name(name) {
-        return Some(logic::uuid_string(host::key_of(&p)));
+    if let Some(player) = server.get_player_by_name(name) {
+        return Some(logic::uuid_string(host::key_of(&player)));
     }
-    with_state(|s| extras::find_uuid_by_name(&s.persisted, name)).flatten()
+    with_state(|state| extras::find_uuid_by_name(&state.persisted, name)).flatten()
 }
 
 pub fn cooldown_left(key: u128, kind: logic::CdKind) -> u64 {
     let now = host::now_ms();
-    with_state(|s| s.cooldowns.remaining(key, kind, now)).unwrap_or(0)
+    with_state(|state| state.cooldowns.remaining(key, kind, now)).unwrap_or(0)
 }
 
 pub fn cooldown_err(left: u64) -> CommandError {
@@ -198,10 +190,10 @@ pub fn clickable_list(head: &str, names: &[String], cmd: &str, hover_verb: &str)
 }
 
 /// Point `distance` blocks ahead of where the player is looking.
-pub fn forward(p: &Player, distance: f64) -> (f64, f64, f64) {
-    let (x, y, z) = p.get_position();
-    let yaw = f64::from(p.get_yaw()).to_radians();
-    let pitch = f64::from(p.get_pitch()).to_radians();
+pub fn forward(player: &Player, distance: f64) -> (f64, f64, f64) {
+    let (x, y, z) = player.get_position();
+    let yaw = f64::from(player.get_yaw()).to_radians();
+    let pitch = f64::from(player.get_pitch()).to_radians();
     (
         x - yaw.sin() * distance * pitch.cos(),
         y - pitch.sin() * distance,
@@ -210,8 +202,8 @@ pub fn forward(p: &Player, distance: f64) -> (f64, f64, f64) {
 }
 
 /// Put a stack in the first empty inventory slot.
-pub fn give_stack(p: &Player, key: &str, count: u8) -> CmdResult {
-    let pinv = p.get_inventory();
+pub fn give_stack(player: &Player, key: &str, count: u8) -> CmdResult {
+    let pinv = player.get_inventory();
     let inv = pinv.as_inventory();
     let mut target = None;
     for slot in 0..inv.get_size() {

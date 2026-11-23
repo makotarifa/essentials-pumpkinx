@@ -47,7 +47,7 @@ pub trait FileStore: Default + Serialize + DeserializeOwned {
         };
         let legacy = unwrap_wrapper(&mut value, Self::WRAPPER_KEY);
         let mut loaded: Self =
-            serde_json::from_value(value).map_err(|e| format!("parse {}: {e}", path.display()))?;
+            serde_json::from_value(value).map_err(|error| format!("parse {}: {error}", path.display()))?;
         let old_schema = loaded.stored_schema() < Self::canonical_schema();
         if old_schema {
             loaded.bump_schema();

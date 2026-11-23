@@ -1,6 +1,3 @@
-//! Utilidades varias: /afk, /heal, /feed, /speed, /exp, /rest, /backup,
-//! /essentials, /ext, /antioch y /suicide.
-
 use crate::{
     cmdutil::{fail, greedy_arg, greedy_cmd, greedy_node, no_arg, optional_target, player_of, reg, resolve_target, say, target_of, unavailable, word, CmdResult},
     events,
@@ -20,8 +17,6 @@ use pumpkin_plugin_api::{
 };
 use std::{fs, path::PathBuf};
 use tracing::info;
-
-// ---- afk ------------------------------------------------------------------------
 
 struct AfkCmd;
 impl CommandHandler for AfkCmd {
@@ -47,20 +42,20 @@ impl CommandHandler for AfkCmd {
         let pos = target.get_position();
         let now = host::now_ms();
         let uuid = logic::uuid_string(key);
-        let (now_afk, broadcast, show_tab, nick) = with_state(|s| {
-            let was = s.afks.remove(key).is_some();
+        let (now_afk, broadcast, show_tab, nick) = with_state(|state| {
+            let was = state.afks.remove(key).is_some();
             if was {
-                s.persisted.afk.remove(&uuid);
+                state.persisted.afk.remove(&uuid);
             } else {
-                s.afks.set(key, AfkInfo { reason: reason.clone(), since_ms: now, pos });
-                s.persisted.afk.insert(
+                state.afks.set(key, AfkInfo { reason: reason.clone(), since_ms: now, pos });
+                state.persisted.afk.insert(
                     uuid.clone(),
                     AfkState { active: true, reason: reason.clone(), since_ms: now },
                 );
             }
-            s.save_persisted();
-            let nick = s.persisted.nicks.get(&uuid).cloned();
-            (!was, s.cfg.afk_broadcast, s.cfg.afk_tab_name, nick)
+            state.save_persisted();
+            let nick = state.persisted.nicks.get(&uuid).cloned();
+            (!was, state.cfg.afk_broadcast, state.cfg.afk_tab_name, nick)
         })
         .ok_or_else(unavailable)?;
         if show_tab {
@@ -80,8 +75,6 @@ impl CommandHandler for AfkCmd {
         Ok(1)
     }
 }
-
-// ---- utilidades estilo EssentialsX ----------------------------------------------
 
 struct HealCmd {
     target: bool,
@@ -141,7 +134,7 @@ impl CommandHandler for SpeedCmd {
         } else {
             return Err(fail("Uso: /speed [jugador] <0.1-10.0>"));
         };
-        let value = extras::parse_walk_speed(speed_raw).map_err(|e| fail(&e))?;
+        let value = extras::parse_walk_speed(speed_raw).map_err(|error| fail(&error))?;
         target.set_walk_speed(extras::engine_walk_speed(value));
         host::ok(&target, &format!("Velocidad de caminata fijada en {value:.2}."));
         info!("essentials: {} speed {value:.2}", target.get_name());
@@ -161,7 +154,7 @@ impl CommandHandler for ExpCmd {
             [value] if extras::parse_level(value).is_ok() => (me, Some(extras::parse_level(value).unwrap())),
             [name] => (resolve_target(&sender, &server, &me, name)?, None),
             [name, value] => {
-                let level = extras::parse_level(value).map_err(|e| fail(&e))?;
+                let level = extras::parse_level(value).map_err(|error| fail(&error))?;
                 (resolve_target(&sender, &server, &me, name)?, Some(level))
             }
             _ => return Err(fail("Uso: /exp [jugador] [nivel]")),
@@ -197,22 +190,20 @@ struct RestCmd {
 impl CommandHandler for RestCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         let me = player_of(&sender)?;
-        let p = if self.target { target_of(&sender, &server, &me, &args, CmdLevel::Two)? } else { me };
-        p.set_exhaustion(0.0);
-        p.set_saturation(10.0);
-        host::info(&p, "Has descansado.");
+        let player = if self.target { target_of(&sender, &server, &me, &args, CmdLevel::Two)? } else { me };
+        player.set_exhaustion(0.0);
+        player.set_saturation(10.0);
+        host::info(&player, "Has descansado.");
         Ok(1)
     }
 }
 
-// ---- texto, info y backup ---------------------------------------------------------
-
 struct BackupCmd;
 impl CommandHandler for BackupCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let dir = with_state(|s| s.dir.clone()).ok_or_else(unavailable)?;
+        let dir = with_state(|state| state.dir.clone()).ok_or_else(unavailable)?;
         let target: PathBuf = dir.join("backups").join(host::now_ms().to_string());
-        fs::create_dir_all(&target).map_err(|e| fail(&format!("No se pudo crear la carpeta de backup: {e}")))?;
+        fs::create_dir_all(&target).map_err(|error| fail(&format!("No se pudo crear la carpeta de backup: {error}")))?;
         let mut copied = 0;
         for name in ["config.json", "homes.json", "warps.json", "state.json"] {
             let src = dir.join(name);
@@ -230,7 +221,7 @@ impl CommandHandler for EssentialsCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let sub = greedy_arg(&args, "args").trim().to_ascii_lowercase();
         if sub.is_empty() || sub == "version" {
-            say(&sender, &format!("EssentialsFusion {} — GPL-3.0 — 86 comandos — Pumpkin 0.2.2", env!("CARGO_PKG_VERSION")));
+            say(&sender, &format!("EssentialsPumpkinX {} — GPL-3.0 — 86 comandos — Pumpkin 0.2.2", env!("CARGO_PKG_VERSION")));
         } else {
             say(&sender, "Subcomandos disponibles: version.");
         }
@@ -253,19 +244,19 @@ impl CommandHandler for ExtCmd {
 struct AntiochCmd;
 impl CommandHandler for AntiochCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         if !greedy_arg(&args, "args").trim().is_empty() {
-            _server.broadcast(&format!("{} lanza la Granada de Antioquía...", p.get_name()));
+            _server.broadcast(&format!("{} lanza la Granada de Antioquía...", player.get_name()));
         }
-        let (x, y, z) = p.get_position();
-        let yaw = p.get_yaw().to_radians() as f64;
-        let pitch = p.get_pitch().to_radians() as f64;
+        let (x, y, z) = player.get_position();
+        let yaw = player.get_yaw().to_radians() as f64;
+        let pitch = player.get_pitch().to_radians() as f64;
         let pos = (
             x - yaw.sin() * 6.0 * pitch.cos(),
             y - pitch.sin() * 6.0,
             z + yaw.cos() * 6.0 * pitch.cos(),
         );
-        let world = p.get_world();
+        let world = player.get_world();
         world.create_explosion(pos, 2.0, false, ExplosionInteraction::Tnt);
         Ok(1)
     }
@@ -274,9 +265,9 @@ impl CommandHandler for AntiochCmd {
 struct SuicideCmd;
 impl CommandHandler for SuicideCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let name = p.get_name();
-        p.set_health(0.0);
+        let player = player_of(&sender)?;
+        let name = player.get_name();
+        player.set_health(0.0);
         _server.broadcast(&format!("{name} se ha quitado la vida."));
         Ok(1)
     }

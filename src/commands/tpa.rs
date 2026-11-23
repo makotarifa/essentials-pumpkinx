@@ -1,6 +1,3 @@
-//! Peticiones de teletransporte: /tpa, /tpahere, /tpaccept, /tpdeny,
-//! /tptoggle, /tpaall, /tpacancel y /tpauto.
-
 use crate::{
     cmdutil::{
         button, cooldown_err, cooldown_left, fail, greedy_arg, greedy_node, has_level, no_arg, one_arg, plain, player_of,

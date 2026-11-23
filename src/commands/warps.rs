@@ -1,5 +1,3 @@
-//! Warps: /setwarp, /delwarp, /warp, /warps y /warpinfo.
-
 use crate::{
     cmdutil::{clickable_list, fail, name_arg, need_op, no_arg, one_arg, player_of, reg, say, unavailable, word, CmdResult},
     host::{self, with_state, State},
@@ -16,14 +14,14 @@ use pumpkin_plugin_api::{
 use tracing::info;
 
 /// Mutate warps.json atomically: edit a copy, save it, then commit it to memory.
-fn mutate_warps<R>(s: &mut State, f: impl FnOnce(&mut store::WarpsFile) -> R) -> Result<R, String> {
-    let mut copy = s.warps.clone();
+fn mutate_warps<R>(state: &mut State, f: impl FnOnce(&mut store::WarpsFile) -> R) -> Result<R, String> {
+    let mut copy = state.warps.clone();
     let r = f(&mut copy);
-    store::save_json(&s.warps_path(), &copy).map_err(|e| {
+    store::save_json(&state.warps_path(), &copy).map_err(|e| {
         tracing::error!("essentials: could not save warps.json: {e}");
         "No se pudieron guardar los datos; el cambio NO se aplicó.".to_string()
     })?;
-    s.warps = copy;
+    state.warps = copy;
     Ok(r)
 }
 

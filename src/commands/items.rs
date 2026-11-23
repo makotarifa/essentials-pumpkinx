@@ -1,9 +1,3 @@
-//! Ítems e inventario: /item, /itemdb, /itemlore, /itemname, /repair,
-//! /unlimited, /hat, /more, /book, /powertool, /powertoollist,
-//! /powertooltoggle, /condense, /skull, /potion, /firework, /invsee,
-//! /enderchest, /clearinventory, /clearinventoryconfirmtoggle,
-//! /remove, /spawnmob, /spawner, /kittycannon, /beezooka y /fireball.
-
 use crate::{
     cmdutil::{fail, forward, give_stack, greedy_arg, greedy_node, has_level, no_arg, player_of, plain, reg, say, unavailable, uuid_of, word, CmdResult},
     environment,
@@ -23,8 +17,8 @@ use pumpkin_plugin_api::{
 };
 use std::collections::BTreeMap;
 
-fn held_slot(p: &Player) -> u32 {
-    u32::from(p.get_inventory().get_selected_slot())
+fn held_slot(player: &Player) -> u32 {
+    u32::from(player.get_inventory().get_selected_slot())
 }
 
 fn parse_entity(raw: &str) -> Option<EntityType> {
@@ -70,8 +64,6 @@ fn parse_entity(raw: &str) -> Option<EntityType> {
     }
 }
 
-// ---- objetos --------------------------------------------------------------------
-
 struct ItemCmd;
 impl CommandHandler for ItemCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
@@ -96,9 +88,9 @@ impl CommandHandler for ItemDbCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         let raw = greedy_arg(&args, "args").trim().to_string();
         if raw.is_empty() {
-            let p = player_of(&sender)?;
-            let slot = held_slot(&p);
-            let key = p.get_inventory().as_inventory().get_item(slot).map(|i| i.get_registry_key()).unwrap_or_else(|| "minecraft:air".into());
+            let player = player_of(&sender)?;
+            let slot = held_slot(&player);
+            let key = player.get_inventory().as_inventory().get_item(slot).map(|i| i.get_registry_key()).unwrap_or_else(|| "minecraft:air".into());
             say(&sender, &format!("Ítem en mano: {key}"));
         } else {
             say(&sender, &format!("Clave: {}", kits::normalize_item_key(&raw)));
@@ -110,14 +102,14 @@ impl CommandHandler for ItemDbCmd {
 struct ItemLoreCmd;
 impl CommandHandler for ItemLoreCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args");
         let mut tokens = raw.splitn(2, char::is_whitespace);
         let action = tokens.next().unwrap_or("").to_ascii_lowercase();
         let text = tokens.next().unwrap_or("").trim().to_string();
-        let pinv = p.get_inventory();
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
-        let slot = held_slot(&p);
+        let slot = held_slot(&player);
         let Some(item) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
         let mut lore = item.get_lore();
         match action.as_str() {
@@ -131,7 +123,7 @@ impl CommandHandler for ItemLoreCmd {
         }
         item.set_lore(lore);
         inv.set_item(slot, Some(item));
-        host::ok(&p, "Lore actualizado.");
+        host::ok(&player, "Lore actualizado.");
         Ok(1)
     }
 }
@@ -139,11 +131,11 @@ impl CommandHandler for ItemLoreCmd {
 struct ItemNameCmd;
 impl CommandHandler for ItemNameCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args").trim().to_string();
-        let pinv = p.get_inventory();
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
-        let slot = held_slot(&p);
+        let slot = held_slot(&player);
         let Some(item) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
         if raw.is_empty() || raw.eq_ignore_ascii_case("off") {
             item.set_custom_name(None);
@@ -151,7 +143,7 @@ impl CommandHandler for ItemNameCmd {
             item.set_custom_name(Some(TextComponent::text(&raw).color_named(NamedColor::Gold)));
         }
         inv.set_item(slot, Some(item));
-        host::ok(&p, "Nombre del ítem actualizado.");
+        host::ok(&player, "Nombre del ítem actualizado.");
         Ok(1)
     }
 }
@@ -189,7 +181,7 @@ impl CommandHandler for UnlimitedCmd {
             }
         })
         .ok_or_else(unavailable)?;
-        with_state(|s| s.save_kits());
+        with_state(|state| state.save_kits());
         let _ = current;
         say(&sender, &message);
         Ok(1)
@@ -199,15 +191,15 @@ impl CommandHandler for UnlimitedCmd {
 struct HatCmd;
 impl CommandHandler for HatCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let pinv = p.get_inventory();
+        let player = player_of(&sender)?;
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
-        let slot = held_slot(&p);
+        let slot = held_slot(&player);
         let Some(held) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
         let old = pinv.get_helmet();
         pinv.set_helmet(Some(held));
         inv.set_item(slot, old);
-        host::ok(&p, "Sombrero colocado.");
+        host::ok(&player, "Sombrero colocado.");
         Ok(1)
     }
 }
@@ -215,10 +207,10 @@ impl CommandHandler for HatCmd {
 struct MoreCmd;
 impl CommandHandler for MoreCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let pinv = p.get_inventory();
+        let player = player_of(&sender)?;
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
-        let slot = held_slot(&p);
+        let slot = held_slot(&player);
         let Some(item) = inv.get_item(slot) else { return Err(fail("No tienes un ítem en la mano.")); };
         let max = item.get_max_count();
         let extra = greedy_arg(&args, "args").trim().parse::<u8>().unwrap_or(max).max(1);
@@ -226,7 +218,7 @@ impl CommandHandler for MoreCmd {
         if next == item.get_count() { return Err(fail("El montón ya está completo.")); }
         item.set_count(next);
         inv.set_item(slot, Some(item));
-        host::ok(&p, &format!("Montón ampliado a {next}."));
+        host::ok(&player, &format!("Montón ampliado a {next}."));
         Ok(1)
     }
 }
@@ -234,9 +226,9 @@ impl CommandHandler for MoreCmd {
 struct BookCmd;
 impl CommandHandler for BookCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        give_stack(&p, "minecraft:writable_book", 1)?;
-        host::ok(&p, "Libro entregado. La API no permite editar páginas ni título desde el plugin.");
+        let player = player_of(&sender)?;
+        give_stack(&player, "minecraft:writable_book", 1)?;
+        host::ok(&player, "Libro entregado. La API no permite editar páginas ni título desde el plugin.");
         Ok(1)
     }
 }
@@ -244,29 +236,27 @@ impl CommandHandler for BookCmd {
 struct FireworkCmd;
 impl CommandHandler for FireworkCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let pinv = p.get_inventory();
+        let player = player_of(&sender)?;
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = (0..inv.get_size()).find(|s| inv.get_item(*s).is_none()).ok_or_else(|| fail("Inventario lleno."))?;
         inv.set_item(slot, Some(ItemStack::new("minecraft:firework_rocket", 1)));
-        host::ok(&p, "Cohete entregado.");
+        host::ok(&player, "Cohete entregado.");
         Ok(1)
     }
 }
 
-// ---- powertools -----------------------------------------------------------------
-
 struct PowerToolCmd;
 impl CommandHandler for PowerToolCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args").trim().to_string();
         if raw.is_empty() { return Err(fail("Uso: /powertool <comando|d:> [ítem]")); }
-        let pinv = p.get_inventory();
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
-        let slot = held_slot(&p);
+        let slot = held_slot(&player);
         let key = inv.get_item(slot).map(|i| i.get_registry_key()).ok_or_else(|| fail("No tienes un ítem en la mano."))?;
-        let uuid = uuid_of(&p);
+        let uuid = uuid_of(&player);
         with_state(|s| {
             let entry = s.kits.powertools.entry(uuid).or_default();
             let list = entry.entry(key.clone()).or_default();
@@ -289,8 +279,8 @@ impl CommandHandler for PowerToolCmd {
 struct PowerToolListCmd;
 impl CommandHandler for PowerToolListCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let list = with_state(|s| kits::list_powertools(&s.kits, &uuid_of(&p))).ok_or_else(unavailable)?;
+        let player = player_of(&sender)?;
+        let list = with_state(|state| kits::list_powertools(&state.kits, &uuid_of(&player))).ok_or_else(unavailable)?;
         if list.is_empty() { return Err(fail("No tienes powertools.")); }
         for (key, commands) in list {
             say(&sender, &format!("{key}: {}", commands.join(", ")));
@@ -302,8 +292,8 @@ impl CommandHandler for PowerToolListCmd {
 struct PowerToolToggleCmd;
 impl CommandHandler for PowerToolToggleCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let uuid = uuid_of(&p);
+        let player = player_of(&sender)?;
+        let uuid = uuid_of(&player);
         let on = with_state(|s| {
             let next = !s.kits.powertool_toggle.get(&uuid).copied().unwrap_or(true);
             s.kits.powertool_toggle.insert(uuid, next);
@@ -319,10 +309,10 @@ impl CommandHandler for PowerToolToggleCmd {
 struct CondenseCmd;
 impl CommandHandler for CondenseCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let filter = greedy_arg(&args, "args").trim().to_string();
         let wanted = if filter.is_empty() { None } else { Some(kits::normalize_item_key(&filter)) };
-        let pinv = p.get_inventory();
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let mut counts: BTreeMap<String, u32> = BTreeMap::new();
         for slot in 0..inv.get_size() {
@@ -347,12 +337,10 @@ impl CommandHandler for CondenseCmd {
             }
         }
         if !changed { return Err(fail("No había objetos para condensar.")); }
-        host::ok(&p, "Inventario condensado.");
+        host::ok(&player, "Inventario condensado.");
         Ok(1)
     }
 }
-
-// ---- vistas de inventario --------------------------------------------------------
 
 fn view_inventory(
     viewer: &Player,
@@ -385,7 +373,7 @@ impl CommandHandler for InvSeeCmd {
             .get_player_by_name(&name)
             .ok_or_else(|| fail(&format!("Jugador '{name}' no conectado.")))?;
         let inv = target.get_inventory().as_inventory();
-        view_inventory(&me, format!("Inventario de {}", target.get_name()), &inv, 36).map_err(|e| fail(&e))?;
+        view_inventory(&me, format!("Inventario de {}", target.get_name()), &inv, 36).map_err(|error| fail(&error))?;
         Ok(1)
     }
 }
@@ -402,7 +390,7 @@ impl CommandHandler for EnderChestCmd {
             return Ok(1);
         }
         let inv = target.get_ender_chest();
-        view_inventory(&me, format!("Ender chest de {}", target.get_name()), &inv, 27).map_err(|e| fail(&e))?;
+        view_inventory(&me, format!("Ender chest de {}", target.get_name()), &inv, 27).map_err(|error| fail(&error))?;
         Ok(1)
     }
 }
@@ -439,29 +427,27 @@ impl CommandHandler for ClearInventoryCmd {
 struct ClearConfirmToggleCmd;
 impl CommandHandler for ClearConfirmToggleCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let off = with_state(|s| {
-            let off = environment::toggle_confirmation(&mut s.persisted, &uuid_of(&p));
+            let off = environment::toggle_confirmation(&mut s.persisted, &uuid_of(&player));
             s.save_persisted();
             off
         })
         .ok_or_else(unavailable)?;
-        host::ok(&p, if off { "Confirmación desactivada." } else { "Confirmación activada." });
+        host::ok(&player, if off { "Confirmación desactivada." } else { "Confirmación activada." });
         Ok(1)
     }
 }
-
-// ---- entidades y objetos especiales ---------------------------------------------
 
 struct RemoveCmd;
 impl CommandHandler for RemoveCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let filter = greedy_arg(&args, "args").trim().to_string();
         let wanted = if filter.is_empty() { None } else { parse_entity(&filter) };
         if !filter.is_empty() && wanted.is_none() { return Err(fail("Tipo de entidad no reconocido.")); }
-        let world = p.get_world();
+        let world = player.get_world();
         let entities = world.get_entities();
         let player_ids: Vec<u32> = server.get_players_in_world(world).iter().map(|pl| pl.as_entity().get_id()).collect();
         let mut removed = 0;
@@ -501,14 +487,14 @@ struct SpawnerCmd;
 impl CommandHandler for SpawnerCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let kind = greedy_arg(&args, "args").trim().to_string();
         if parse_entity(&kind).is_none() { return Err(fail("Mob no reconocido.")); }
-        let (x, y, z) = forward(&p, 3.0);
+        let (x, y, z) = forward(&player, 3.0);
         let pos = BlockPos { x: x.floor() as i32, y: y.floor() as i32, z: z.floor() as i32 };
-        let ok = p.get_world().set_block_by_name(pos, "minecraft:spawner", BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::NOTIFY_LISTENERS);
+        let ok = player.get_world().set_block_by_name(pos, "minecraft:spawner", BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::NOTIFY_LISTENERS);
         if !ok { return Err(fail("No se pudo colocar el spawner.")); }
-        host::ok(&p, "Spawner colocado (el tipo de mob no se puede guardar con la API WIT 0.1).");
+        host::ok(&player, "Spawner colocado (el tipo de mob no se puede guardar con la API WIT 0.1).");
         Ok(1)
     }
 }
@@ -517,16 +503,16 @@ struct SkullCmd;
 impl CommandHandler for SkullCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let name = greedy_arg(&args, "args").trim().to_string();
         if name.is_empty() { return Err(fail("Uso: /skull <nombre>")); }
-        let pinv = p.get_inventory();
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = inv.get_size().saturating_sub(1);
         let item = ItemStack::new("minecraft:player_head", 1);
         item.set_custom_name(Some(TextComponent::text(&name)));
         inv.set_item(slot, Some(item));
-        host::ok(&p, &format!("Cabeza de {name} entregada (sin textura de perfil)."));
+        host::ok(&player, &format!("Cabeza de {name} entregada (sin textura de perfil)."));
         Ok(1)
     }
 }
@@ -543,7 +529,7 @@ enum FunKind {
 impl CommandHandler for FunSpawnCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let (entity_kind, count) = match self.kind {
             FunKind::Kitty => (EntityType::Cat, 5u32),
             FunKind::Bee => (EntityType::Bee, 1),
@@ -552,16 +538,16 @@ impl CommandHandler for FunSpawnCmd {
                 (parse_entity(if raw.is_empty() { "fireball" } else { &raw }).unwrap_or(EntityType::Fireball), 1)
             }
         };
-        let (dx, dy, dz) = forward(&p, 2.0);
-        let (px, py, pz) = p.get_position();
+        let (dx, dy, dz) = forward(&player, 2.0);
+        let (px, py, pz) = player.get_position();
         let vx = dx - px;
         let vy = dy - py;
         let vz = dz - pz;
         for i in 0..count {
-            let entity = p.get_world().spawn_entity(entity_kind, (dx + f64::from(i % 3), dy + 1.0, dz + f64::from(i / 3)));
+            let entity = player.get_world().spawn_entity(entity_kind, (dx + f64::from(i % 3), dy + 1.0, dz + f64::from(i / 3)));
             entity.set_velocity((vx * 2.0, vy * 2.0, vz * 2.0));
             if matches!(self.kind, FunKind::Bee) {
-                p.get_world().create_explosion((dx, dy, dz), 0.5, false, pumpkin_plugin_api::world::ExplosionInteraction::None);
+                player.get_world().create_explosion((dx, dy, dz), 0.5, false, pumpkin_plugin_api::world::ExplosionInteraction::None);
             }
         }
         let _ = server;
@@ -574,16 +560,16 @@ struct PotionCmd;
 impl CommandHandler for PotionCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let effect = greedy_arg(&args, "args").trim().to_string();
         if effect.is_empty() { return Err(fail("Uso: /potion <efecto>")); }
-        let pinv = p.get_inventory();
+        let pinv = player.get_inventory();
         let inv = pinv.as_inventory();
         let slot = inv.get_size().saturating_sub(1);
         let item = ItemStack::new("minecraft:potion", 1);
         item.set_custom_name(Some(TextComponent::text(&format!("Poción: {effect}")).color_named(NamedColor::DarkPurple)));
         inv.set_item(slot, Some(item));
-        host::ok(&p, "Poción entregada como objeto con nombre; la API no permite fijar efectos NBT.");
+        host::ok(&player, "Poción entregada como objeto con nombre; la API no permite fijar efectos NBT.");
         Ok(1)
     }
 }

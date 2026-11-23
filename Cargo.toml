@@ -1,8 +1,8 @@
 [package]
-name = "essentials_fusion"
+name = "essentials_pumpkinx"
 version = "1.0.0"
 edition = "2021"
-description = "Unified Pumpkin essentials: homes, warps, tpa, back, gamemode, fly, flyspeed and afk (WASM)"
+description = "EssentialsPumpkinX: homes, warps, tpa, back, gamemode, fly, flyspeed and afk (WASM)"
 license = "GPL-3.0"
 
 [lib]

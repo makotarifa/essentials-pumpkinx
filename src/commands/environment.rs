@@ -1,8 +1,3 @@
-//! Entorno: mesas de trabajo (/anvil, /cartographytable, /grindstone,
-//! /loom, /smithingtable, /workbench, /disposal, /editsign, /stonecutter),
-//! /ptime, /pweather, /thunder, /ice, /tree, /bigtree, /break, /burn,
-//! /lightning y /nuke.
-
 use crate::{
     cmdutil::{fail, forward, greedy_arg, greedy_node, has_level, no_arg, player_of, reg, say, unavailable, CmdResult},
     environment,
@@ -29,8 +24,6 @@ fn update_flags() -> BlockFlags {
     BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::NOTIFY_LISTENERS
 }
 
-// ---- mesas y GUI ----------------------------------------------------------------
-
 #[derive(Clone, Copy)]
 enum GuiKind {
     Anvil,
@@ -47,7 +40,7 @@ struct GuiCmd {
 }
 impl CommandHandler for GuiCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let (screen, title) = match self.kind {
             GuiKind::Anvil => (Screen::Anvil, "Yunque"),
             GuiKind::Cartography => (Screen::CartographyTable, "Mesa de cartografía"),
@@ -57,7 +50,7 @@ impl CommandHandler for GuiCmd {
             GuiKind::Workbench => (Screen::Crafting, "Mesa de trabajo"),
             GuiKind::Disposal => (Screen::Generic9x6, "Basura"),
         };
-        p.open_gui(Gui::new(screen, TextComponent::text(title)));
+        player.open_gui(Gui::new(screen, TextComponent::text(title)));
         Ok(1)
     }
 }
@@ -65,10 +58,10 @@ impl CommandHandler for GuiCmd {
 struct EditSignCmd;
 impl CommandHandler for EditSignCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let pos = block_pos(forward(&p, 5.0));
-        p.open_sign_editor(pos, true);
-        host::info(&p, "Editor de cartel abierto (bloque aproximado a 5 bloques).");
+        let player = player_of(&sender)?;
+        let pos = block_pos(forward(&player, 5.0));
+        player.open_sign_editor(pos, true);
+        host::info(&player, "Editor de cartel abierto (bloque aproximado a 5 bloques).");
         Ok(1)
     }
 }
@@ -76,13 +69,11 @@ impl CommandHandler for EditSignCmd {
 struct StoneCutterCmd;
 impl CommandHandler for StoneCutterCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        p.open_gui(Gui::new(Screen::Stonecutter, TextComponent::text("Cortador de piedra")));
+        let player = player_of(&sender)?;
+        player.open_gui(Gui::new(Screen::Stonecutter, TextComponent::text("Cortador de piedra")));
         Ok(1)
     }
 }
-
-// ---- entornos -------------------------------------------------------------------
 
 struct IceCmd;
 impl CommandHandler for IceCmd {
@@ -102,9 +93,9 @@ impl CommandHandler for IceCmd {
     }
 }
 
-fn grow_tree(p: &Player, big: bool) -> CmdResult {
-    let base = block_pos(forward(&p, 5.0));
-    let world = p.get_world();
+fn grow_tree(player: &Player, big: bool) -> CmdResult {
+    let base = block_pos(forward(&player, 5.0));
+    let world = player.get_world();
     let height = if big { 7u32 } else { 4u32 };
     for i in 0..height {
         world.set_block_by_name(BlockPos { y: base.y + i as i32, ..base }, "minecraft:oak_log", update_flags());
@@ -124,7 +115,7 @@ fn grow_tree(p: &Player, big: bool) -> CmdResult {
             }
         }
     }
-    host::ok(p, if big { "Árbol grande generado." } else { "Árbol generado." });
+    host::ok(player, if big { "Árbol grande generado." } else { "Árbol generado." });
     Ok(1)
 }
 
@@ -140,15 +131,15 @@ impl CommandHandler for TreeCmd {
 struct BreakCmd;
 impl CommandHandler for BreakCmd {
     fn handle(&self, sender: CommandSender, _server: Server, _args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
-        let pos = block_pos(forward(&p, 5.0));
-        let block = p.get_world().get_block(pos);
+        let player = player_of(&sender)?;
+        let pos = block_pos(forward(&player, 5.0));
+        let block = player.get_world().get_block(pos);
         let name = block.name.to_ascii_lowercase();
         if name.contains("bedrock") && !has_level(&sender, CmdLevel::Three) {
             return Err(fail("No puedes romper bedrock."));
         }
-        p.get_world().set_block_by_name(pos, "minecraft:air", update_flags());
-        host::ok(&p, "Bloque eliminado.");
+        player.get_world().set_block_by_name(pos, "minecraft:air", update_flags());
+        host::ok(&player, "Bloque eliminado.");
         Ok(1)
     }
 }
@@ -190,17 +181,17 @@ struct ThunderCmd;
 impl CommandHandler for ThunderCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Two) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args").trim().to_ascii_lowercase();
         let on = match raw.as_str() {
             "on" | "true" | "1" => true,
             "off" | "false" | "0" => false,
             _ => return Err(fail("Uso: /thunder on|off")),
         };
-        let world = p.get_world();
+        let world = player.get_world();
         world.set_thundering(on);
         if on { world.set_raining(true); }
-        host::ok(&p, &format!("Tormenta {}.", if on { "activada" } else { "desactivada" }));
+        host::ok(&player, &format!("Tormenta {}.", if on { "activada" } else { "desactivada" }));
         Ok(1)
     }
 }
@@ -209,9 +200,9 @@ struct NukeCmd;
 impl CommandHandler for NukeCmd {
     fn handle(&self, sender: CommandSender, server: Server, args: ConsumedArgs) -> CmdResult {
         if !has_level(&sender, CmdLevel::Three) { return Err(CommandError::PermissionDenied); }
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let label = format!("nuke:{}", greedy_arg(&args, "args").trim().to_ascii_lowercase());
-        let confirmed = with_state(|s| environment::take_or_set(&mut s.pending_confirm, host::key_of(&p), &label))
+        let confirmed = with_state(|state| environment::take_or_set(&mut state.pending_confirm, host::key_of(&player), &label))
             .ok_or_else(unavailable)?;
         if !confirmed {
             return Err(fail("Confirmación requerida: vuelve a ejecutar /nuke para confirmar."));
@@ -230,7 +221,7 @@ impl CommandHandler for NukeCmd {
                 }
             }
         }
-        host::ok(&p, "Bombardeo ejecutado.");
+        host::ok(&player, "Bombardeo ejecutado.");
         Ok(1)
     }
 }
@@ -238,16 +229,16 @@ impl CommandHandler for NukeCmd {
 struct PlayerTimeCmd;
 impl CommandHandler for PlayerTimeCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args").trim().to_string();
-        let world = p.get_world();
+        let world = player.get_world();
         if raw.is_empty() || raw.eq_ignore_ascii_case("get") {
             say(&sender, &format!("Hora del mundo: {} ticks.", world.get_time_of_day()));
             return Ok(1);
         }
         let ticks = environment::parse_time(&raw).ok_or_else(|| fail("Hora no reconocida (day/noon/night/midnight o ticks)."))?;
         world.set_time_of_day(ticks);
-        host::ok(&p, &format!("Hora del mundo ajustada a {ticks} ticks (la API no tiene hora por jugador)."));
+        host::ok(&player, &format!("Hora del mundo ajustada a {ticks} ticks (la API no tiene hora por jugador)."));
         Ok(1)
     }
 }
@@ -255,19 +246,19 @@ impl CommandHandler for PlayerTimeCmd {
 struct PlayerWeatherCmd;
 impl CommandHandler for PlayerWeatherCmd {
     fn handle(&self, sender: CommandSender, _server: Server, args: ConsumedArgs) -> CmdResult {
-        let p = player_of(&sender)?;
+        let player = player_of(&sender)?;
         let raw = greedy_arg(&args, "args").trim().to_string();
         if raw.is_empty() || raw.eq_ignore_ascii_case("get") {
-            let current = p.get_player_weather().map_or("por defecto".into(), |w| format!("{w:?}"));
+            let current = player.get_player_weather().map_or("por defecto".into(), |w| format!("{w:?}"));
             say(&sender, &format!("Clima del jugador: {current}."));
             return Ok(1);
         }
         match environment::parse_weather(&raw).ok_or_else(|| fail("Clima no reconocido (clear/rain/reset)."))? {
-            environment::WeatherKind::Clear => p.set_player_weather(PlayerWeather::Clear),
-            environment::WeatherKind::Downfall => p.set_player_weather(PlayerWeather::Downfall),
-            environment::WeatherKind::Reset => p.reset_player_weather(),
+            environment::WeatherKind::Clear => player.set_player_weather(PlayerWeather::Clear),
+            environment::WeatherKind::Downfall => player.set_player_weather(PlayerWeather::Downfall),
+            environment::WeatherKind::Reset => player.reset_player_weather(),
         }
-        host::ok(&p, "Clima personalizado actualizado.");
+        host::ok(&player, "Clima personalizado actualizado.");
         Ok(1)
     }
 }
@@ -303,7 +294,7 @@ pub fn register(ctx: &Context) -> Result<(), String> {
         ("thunder", "Activar tormenta", two),
         ("nuke", "Bombardeo", three),
     ] {
-        // PermissionLevel::Zero se traduce a Allow para mantener defaults legibles.
+        // PermissionLevel::Zero maps to Allow to keep the defaults readable.
         if l == zero {
             ctx.register_permission(&Permission {
                 node: format!("pumpkin_essentials:{n}"),

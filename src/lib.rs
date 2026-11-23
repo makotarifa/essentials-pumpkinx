@@ -1,7 +1,4 @@
-//! EssentialsFusion: one WASM plugin combining PumpkinEssentials and VEssentials features.
-//!
-//! Pure, host-testable modules: `config`, `extras`, `logic`, `store`.
-//! WASM-only glue: `cmdutil`, `host`, `commands`, `events`, `tick`, `plugin`.
+//! EssentialsPumpkinX: one WASM plugin combining PumpkinEssentials and VEssentials features.
 //!
 //! The plugin metadata name is deliberately `pumpkin_essentials` so that the
 //! existing `plugins/data/pumpkin_essentials/` files are read and written

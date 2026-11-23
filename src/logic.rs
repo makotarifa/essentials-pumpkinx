@@ -10,12 +10,10 @@ use std::collections::HashMap;
 pub type Key = u128;
 
 /// Hyphenated UUID string for a key (the form used as the homes.json key).
-pub fn uuid_string(k: Key) -> String {
-    let h = format!("{k:032x}");
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+pub fn uuid_string(key: Key) -> String {
+    let hex = format!("{key:032x}");
+    format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
-
-// ---- names -----------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NameError {
@@ -42,13 +40,11 @@ pub fn validate_name(raw: &str) -> Result<String, NameError> {
     if raw.chars().count() > 32 {
         return Err(NameError::TooLong);
     }
-    if !raw.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    if !raw.chars().all(|character| character.is_ascii_alphanumeric() || character == '_' || character == '-') {
         return Err(NameError::BadChar);
     }
     Ok(raw.to_ascii_lowercase())
 }
-
-// ---- home limit ------------------------------------------------------------
 
 /// Effective home limit; `None` = unlimited.
 pub fn effective_limit(cfg: &Config, override_limit: Option<u32>, is_op: bool) -> Option<u32> {
@@ -68,17 +64,15 @@ pub enum SetHome {
 
 /// Decide whether `name` (already validated/lowercase) may be saved.
 pub fn check_set_home(cfg: &Config, entry: Option<&PlayerHomes>, name: &str, is_op: bool) -> SetHome {
-    if entry.is_some_and(|e| e.homes.contains_key(name)) {
+    if entry.is_some_and(|candidate| candidate.homes.contains_key(name)) {
         return SetHome::Overwritten;
     }
-    let count = entry.map_or(0, |e| e.homes.len());
-    match effective_limit(cfg, entry.and_then(|e| e.limit), is_op) {
+    let count = entry.map_or(0, |candidate| candidate.homes.len());
+    match effective_limit(cfg, entry.and_then(|candidate| candidate.limit), is_op) {
         Some(limit) if count >= limit as usize => SetHome::LimitReached(limit),
         _ => SetHome::Created,
     }
 }
-
-// ---- cooldowns -------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CdKind {
@@ -114,8 +108,6 @@ impl Cooldowns {
         }
     }
 }
-
-// ---- warmups ---------------------------------------------------------------
 
 /// A player who moves further than this many blocks from the warmup start cancels it.
 pub const MAX_MOVE: f64 = 0.5;
@@ -202,8 +194,6 @@ impl Warmups {
         out
     }
 }
-
-// ---- tpa ---------------------------------------------------------------------
 
 /// Direction of the teleport once a request is accepted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -321,8 +311,6 @@ impl Tpas {
     }
 }
 
-// ---- back ----------------------------------------------------------------------
-
 /// In-memory only. Each record overwrites the previous one, so the newest of
 /// "before a plugin teleport" and "death" always wins.
 #[derive(Debug, Default)]
@@ -341,8 +329,6 @@ impl Backs {
         self.map.remove(&key);
     }
 }
-
-// ---- home rename ---------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenameHome {

@@ -1,180 +1,180 @@
-# Compatibilidad con EssentialsX 2.x (auditoría final)
+# Compatibility with EssentialsX 2.x (final audit)
 
-Fuente oficial: `Essentials/src/main/resources/plugin.yml` de EssentialsX 2.x (GPL-3.0), 153 comandos.
+Official source: `Essentials/src/main/resources/plugin.yml` from EssentialsX 2.x (GPL-3.0), 153 commands.
 
-Comparado con los comandos registrados en `src/` de EssentialsFusion, el núcleo Pumpkin 0.2.2+26.3-26.60 y los plugins del servidor (PumpChat, dMOTD).
+Compared with the commands registered in the `src/` tree of EssentialsPumpkinX, the Pumpkin core 0.2.2+26.3-26.60, and the server plugins (PumpChat, dMOTD).
 
-## Estadísticas
+## Statistics
 
-- **IMPLEMENTADO:** 88
-- **CUBIERTO:** 19
-- **LIMITADO:** 43
-- **AÑADIDO AHORA:** 3
+- **IMPLEMENTED:** 88
+- **COVERED:** 19
+- **LIMITED:** 43
+- **ADDED NOW:** 3
 - **Total:** 153
 
-## Inventario
+## Inventory
 
-| Comando | Estado | Detalle |
+| Command | Status | Detail |
 |---|---|---|
-| `afk` | IMPLEMENTADO | — |
-| `antioch` | LIMITADO | create_explosion en punto aproximado, no TNT real |
-| `anvil` | IMPLEMENTADO | — |
-| `back` | IMPLEMENTADO | — |
-| `backup` | LIMITADO | solo JSON del plugin, no mundo ni save-all |
-| `balance` | IMPLEMENTADO | — |
-| `balancetop` | IMPLEMENTADO | — |
-| `ban` | CUBIERTO | núcleo Pumpkin (/ban) |
-| `banip` | CUBIERTO | núcleo Pumpkin (/banip) |
-| `beezooka` | LIMITADO | explosión inmediata, sin retardo de 1s |
-| `book` | LIMITADO | sin API de autor/título/páginas; entrega writable_book |
-| `bottom` | LIMITADO | usa get_min_y + 1 sin búsqueda segura |
-| `break` | LIMITADO | sin evento de rotura ni drops |
-| `broadcast` | CUBIERTO | PumpChat (/broadcast) |
-| `broadcastworld` | IMPLEMENTADO | — |
-| `bigtree` | LIMITADO | generación simplificada de roble grande |
-| `burn` | IMPLEMENTADO | — |
-| `cartographytable` | IMPLEMENTADO | — |
-| `clearinventory` | LIMITADO | confirmación en memoria, se pierde al recargar |
-| `clearinventoryconfirmtoggle` | IMPLEMENTADO | — |
-| `condense` | LIMITADO | recrea ItemStacks y pierde NBT/encantamientos |
-| `compass` | IMPLEMENTADO | — |
-| `createkit` | IMPLEMENTADO | — |
-| `customtext` | IMPLEMENTADO | — |
-| `delhome` | IMPLEMENTADO | — |
-| `deljail` | IMPLEMENTADO | — |
-| `delkit` | IMPLEMENTADO | — |
-| `delwarp` | IMPLEMENTADO | — |
-| `depth` | IMPLEMENTADO | — |
-| `disposal` | IMPLEMENTADO | — |
-| `eco` | IMPLEMENTADO | — |
-| `enchant` | CUBIERTO | núcleo Pumpkin (/enchant) |
-| `enderchest` | LIMITADO | vista de solo lectura cuando el objetivo es otro jugador |
-| `essentials` | IMPLEMENTADO | — |
-| `exp` | IMPLEMENTADO | — |
-| `ext` | IMPLEMENTADO | — |
-| `feed` | IMPLEMENTADO | — |
-| `fly` | IMPLEMENTADO | — |
-| `fireball` | LIMITADO | spawn_entity + set_velocity, sin metadatos de proyectil |
-| `firework` | AÑADIDO AHORA | entrega cohete estándar; sin NBT pirotécnico personalizado |
-| `gamemode` | CUBIERTO | núcleo Pumpkin (/gamemode); alias /gmc,/gms,/gma,/gmsp en EssentialsFusion |
-| `gc` | LIMITADO | sin conteo de chunks/entidades por mundo |
-| `getpos` | IMPLEMENTADO | — |
-| `give` | CUBIERTO | núcleo Pumpkin (/give) |
-| `god` | IMPLEMENTADO | — |
-| `grindstone` | IMPLEMENTADO | — |
-| `hat` | IMPLEMENTADO | — |
-| `heal` | IMPLEMENTADO | — |
-| `help` | CUBIERTO | núcleo Pumpkin (/help) |
-| `helpop` | IMPLEMENTADO | — |
-| `home` | IMPLEMENTADO | — |
-| `ice` | LIMITADO | set_freeze_ticks + velocidad cero, congelamiento parcial |
-| `ignore` | LIMITADO | solo mensajería interna, no /msg de PumpChat |
-| `info` | LIMITADO | solo datos expuestos por la API (version/TPS/memoria/mundos) |
-| `invsee` | LIMITADO | vista de solo lectura del inventario ajeno |
-| `item` | IMPLEMENTADO | — |
-| `itemdb` | IMPLEMENTADO | — |
-| `itemlore` | IMPLEMENTADO | — |
-| `itemname` | IMPLEMENTADO | — |
-| `jailedplayers` | IMPLEMENTADO | — |
-| `jails` | AÑADIDO AHORA | hueco real de la auditoría, implementado en esta iteración |
-| `jump` | IMPLEMENTADO | — |
-| `kick` | CUBIERTO | núcleo Pumpkin (/kick) |
-| `kickall` | IMPLEMENTADO | — |
-| `kill` | CUBIERTO | núcleo Pumpkin (/kill) |
-| `kit` | LIMITADO | guarda solo id y count por objeto |
-| `kitreset` | IMPLEMENTADO | — |
-| `kittycannon` | LIMITADO | spawns simples, sin variantes ni domesticación |
-| `lightning` | IMPLEMENTADO | — |
-| `list` | CUBIERTO | núcleo Pumpkin (/list) |
-| `loom` | IMPLEMENTADO | — |
-| `mail` | IMPLEMENTADO | — |
-| `me` | CUBIERTO | núcleo Pumpkin (/me) |
-| `more` | IMPLEMENTADO | — |
-| `motd` | CUBIERTO | dMOTD (/motd) |
-| `msg` | CUBIERTO | PumpChat (/msg) |
-| `msgtoggle` | LIMITADO | no intercepta /msg de PumpChat; afecta a /r y /mail internos |
-| `mute` | IMPLEMENTADO | — |
-| `near` | IMPLEMENTADO | — |
-| `nick` | LIMITADO | usa tab-list y puede ser sobrescrito por otros plugins |
-| `nuke` | LIMITADO | explosiones en rejilla, sin TNT temporizada |
-| `tpoffline` | LIMITADO | usa última ubicación propia, no usercache de Pumpkin |
-| `pay` | IMPLEMENTADO | — |
-| `paytoggle` | IMPLEMENTADO | — |
-| `payconfirmtoggle` | IMPLEMENTADO | — |
-| `ping` | IMPLEMENTADO | — |
-| `playtime` | IMPLEMENTADO | — |
-| `potion` | LIMITADO | sin NBT de efectos; entrega poción con nombre |
-| `powertool` | IMPLEMENTADO | — |
-| `powertoollist` | IMPLEMENTADO | — |
-| `powertooltoggle` | IMPLEMENTADO | — |
-| `ptime` | LIMITADO | API sin hora por jugador; ajusta la hora del mundo |
-| `pweather` | IMPLEMENTADO | — |
-| `r` | LIMITADO | usa el reply target guardado por este plugin |
-| `rtoggle` | LIMITADO | solo mensajería interna |
-| `realname` | IMPLEMENTADO | — |
-| `recipe` | CUBIERTO | núcleo Pumpkin (/recipe) |
-| `remove` | LIMITADO | get_entities no expone tipo; filtro validado pero no aplicado |
-| `renamehome` | IMPLEMENTADO | — |
-| `repair` | LIMITADO | WIT 0.1 no expone get_damage/set_damage en item-stack |
-| `rest` | IMPLEMENTADO | — |
-| `rules` | IMPLEMENTADO | — |
-| `seen` | LIMITADO | solo jugadores vistos desde la instalación del plugin |
-| `sell` | LIMITADO | sin encantamientos/NBT; artículos sin precio no se venden |
-| `sethome` | IMPLEMENTADO | — |
-| `setjail` | IMPLEMENTADO | — |
-| `settpr` | IMPLEMENTADO | — |
-| `setwarp` | IMPLEMENTADO | — |
-| `setworth` | LIMITADO | precio por clave de objeto, sin NBT |
-| `showkit` | IMPLEMENTADO | — |
-| `editsign` | LIMITADO | bloque objetivo aproximado a 5 bloques |
-| `skull` | LIMITADO | sin perfil/textura de jugador |
-| `smithingtable` | IMPLEMENTADO | — |
-| `socialspy` | LIMITADO | solo copia /r y /mail de este plugin |
-| `spawner` | LIMITADO | set_block_by_name sin NBT de tipo de mob |
-| `spawnmob` | IMPLEMENTADO | — |
-| `speed` | IMPLEMENTADO | — |
-| `stonecutter` | AÑADIDO AHORA | hueco real de la auditoría, implementado en esta iteración |
-| `sudo` | LIMITADO | lista de bloqueo de comandos peligrosos; se ejecuta con permisos del objetivo |
-| `suicide` | IMPLEMENTADO | — |
-| `tempban` | IMPLEMENTADO | — |
-| `tempbanip` | LIMITADO | API WIT no expone gestión de bans por IP; solo /tempban por UUID |
-| `thunder` | IMPLEMENTADO | — |
-| `time` | CUBIERTO | núcleo Pumpkin (/time) |
-| `togglejail` | IMPLEMENTADO | — |
-| `top` | LIMITADO | usa get_top_block_y sin búsqueda de ubicación segura |
-| `tp` | CUBIERTO | núcleo Pumpkin (/tp) |
-| `tpa` | IMPLEMENTADO | — |
-| `tpaall` | IMPLEMENTADO | — |
-| `tpaccept` | IMPLEMENTADO | — |
-| `tpahere` | IMPLEMENTADO | — |
-| `tpall` | IMPLEMENTADO | — |
-| `tpauto` | IMPLEMENTADO | — |
-| `tpacancel` | IMPLEMENTADO | — |
-| `tpdeny` | IMPLEMENTADO | — |
-| `tphere` | IMPLEMENTADO | — |
-| `tpo` | IMPLEMENTADO | — |
-| `tpohere` | LIMITADO | API no permite mover entidades offline |
-| `tppos` | IMPLEMENTADO | — |
-| `tpr` | IMPLEMENTADO | — |
-| `tptoggle` | IMPLEMENTADO | — |
-| `tree` | LIMITADO | generación simplificada de roble |
-| `unban` | CUBIERTO | núcleo Pumpkin (/pardon) |
-| `unbanip` | CUBIERTO | núcleo Pumpkin (/pardonip) |
-| `unlimited` | LIMITADO | sin evento fiable de consumo para reponer objetos |
-| `vanish` | IMPLEMENTADO | — |
-| `warp` | IMPLEMENTADO | — |
-| `warpinfo` | IMPLEMENTADO | — |
-| `weather` | CUBIERTO | núcleo Pumpkin (/weather) |
-| `whois` | IMPLEMENTADO | — |
-| `workbench` | IMPLEMENTADO | — |
-| `world` | LIMITADO | teletransporta al spawn del mundo, sin escalado Nether |
-| `worth` | LIMITADO | precio por clave de objeto, sin NBT |
+| `afk` | IMPLEMENTED | — |
+| `antioch` | LIMITED | create_explosion at an approximate point, no real TNT |
+| `anvil` | IMPLEMENTED | — |
+| `back` | IMPLEMENTED | — |
+| `backup` | LIMITED | plugin JSON only, no world or save-all |
+| `balance` | IMPLEMENTED | — |
+| `balancetop` | IMPLEMENTED | — |
+| `ban` | COVERED | Pumpkin core (/ban) |
+| `banip` | COVERED | Pumpkin core (/banip) |
+| `beezooka` | LIMITED | immediate explosion, no 1s delay |
+| `book` | LIMITED | no author/title/pages API; gives writable_book |
+| `bottom` | LIMITED | uses get_min_y + 1 without safe-location search |
+| `break` | LIMITED | no break event or drops |
+| `broadcast` | COVERED | PumpChat (/broadcast) |
+| `broadcastworld` | IMPLEMENTED | — |
+| `bigtree` | LIMITED | simplified large oak generation |
+| `burn` | IMPLEMENTED | — |
+| `cartographytable` | IMPLEMENTED | — |
+| `clearinventory` | LIMITED | in-memory confirmation, lost on reload |
+| `clearinventoryconfirmtoggle` | IMPLEMENTED | — |
+| `condense` | LIMITED | recreates ItemStacks and loses NBT/enchantments |
+| `compass` | IMPLEMENTED | — |
+| `createkit` | IMPLEMENTED | — |
+| `customtext` | IMPLEMENTED | — |
+| `delhome` | IMPLEMENTED | — |
+| `deljail` | IMPLEMENTED | — |
+| `delkit` | IMPLEMENTED | — |
+| `delwarp` | IMPLEMENTED | — |
+| `depth` | IMPLEMENTED | — |
+| `disposal` | IMPLEMENTED | — |
+| `eco` | IMPLEMENTED | — |
+| `enchant` | COVERED | Pumpkin core (/enchant) |
+| `enderchest` | LIMITED | read-only view when the target is another player |
+| `essentials` | IMPLEMENTED | — |
+| `exp` | IMPLEMENTED | — |
+| `ext` | IMPLEMENTED | — |
+| `feed` | IMPLEMENTED | — |
+| `fly` | IMPLEMENTED | — |
+| `fireball` | LIMITED | spawn_entity + set_velocity, no projectile metadata |
+| `firework` | ADDED NOW | gives a standard rocket; no custom firework NBT |
+| `gamemode` | COVERED | Pumpkin core (/gamemode); /gmc,/gms,/gma,/gmsp aliases in EssentialsPumpkinX |
+| `gc` | LIMITED | no per-world chunk/entity count |
+| `getpos` | IMPLEMENTED | — |
+| `give` | COVERED | Pumpkin core (/give) |
+| `god` | IMPLEMENTED | — |
+| `grindstone` | IMPLEMENTED | — |
+| `hat` | IMPLEMENTED | — |
+| `heal` | IMPLEMENTED | — |
+| `help` | COVERED | Pumpkin core (/help) |
+| `helpop` | IMPLEMENTED | — |
+| `home` | IMPLEMENTED | — |
+| `ice` | LIMITED | set_freeze_ticks + zero velocity, partial freeze |
+| `ignore` | LIMITED | internal messaging only, not PumpChat /msg |
+| `info` | LIMITED | only data exposed by the API (version/TPS/memory/worlds) |
+| `invsee` | LIMITED | read-only view of another player's inventory |
+| `item` | IMPLEMENTED | — |
+| `itemdb` | IMPLEMENTED | — |
+| `itemlore` | IMPLEMENTED | — |
+| `itemname` | IMPLEMENTED | — |
+| `jailedplayers` | IMPLEMENTED | — |
+| `jails` | ADDED NOW | real audit gap, implemented in this iteration |
+| `jump` | IMPLEMENTED | — |
+| `kick` | COVERED | Pumpkin core (/kick) |
+| `kickall` | IMPLEMENTED | — |
+| `kill` | COVERED | Pumpkin core (/kill) |
+| `kit` | LIMITED | stores only id and count per item |
+| `kitreset` | IMPLEMENTED | — |
+| `kittycannon` | LIMITED | simple spawns, no variants or taming |
+| `lightning` | IMPLEMENTED | — |
+| `list` | COVERED | Pumpkin core (/list) |
+| `loom` | IMPLEMENTED | — |
+| `mail` | IMPLEMENTED | — |
+| `me` | COVERED | Pumpkin core (/me) |
+| `more` | IMPLEMENTED | — |
+| `motd` | COVERED | dMOTD (/motd) |
+| `msg` | COVERED | PumpChat (/msg) |
+| `msgtoggle` | LIMITED | does not intercept PumpChat /msg; affects internal /r and /mail |
+| `mute` | IMPLEMENTED | — |
+| `near` | IMPLEMENTED | — |
+| `nick` | LIMITED | uses tab-list and may be overwritten by other plugins |
+| `nuke` | LIMITED | grid explosions, no timed TNT |
+| `tpoffline` | LIMITED | uses own last saved location, not Pumpkin usercache |
+| `pay` | IMPLEMENTED | — |
+| `paytoggle` | IMPLEMENTED | — |
+| `payconfirmtoggle` | IMPLEMENTED | — |
+| `ping` | IMPLEMENTED | — |
+| `playtime` | IMPLEMENTED | — |
+| `potion` | LIMITED | no effect NBT; gives a named potion |
+| `powertool` | IMPLEMENTED | — |
+| `powertoollist` | IMPLEMENTED | — |
+| `powertooltoggle` | IMPLEMENTED | — |
+| `ptime` | LIMITED | no per-player time in the API; adjusts world time |
+| `pweather` | IMPLEMENTED | — |
+| `r` | LIMITED | uses the reply target stored by this plugin |
+| `rtoggle` | LIMITED | internal messaging only |
+| `realname` | IMPLEMENTED | — |
+| `recipe` | COVERED | Pumpkin core (/recipe) |
+| `remove` | LIMITED | get_entities does not expose type; filter validated but not applied |
+| `renamehome` | IMPLEMENTED | — |
+| `repair` | LIMITED | WIT 0.1 does not expose get_damage/set_damage on item-stack |
+| `rest` | IMPLEMENTED | — |
+| `rules` | IMPLEMENTED | — |
+| `seen` | LIMITED | only players seen since the plugin was installed |
+| `sell` | LIMITED | no enchantments/NBT; items without a price are not sold |
+| `sethome` | IMPLEMENTED | — |
+| `setjail` | IMPLEMENTED | — |
+| `settpr` | IMPLEMENTED | — |
+| `setwarp` | IMPLEMENTED | — |
+| `setworth` | LIMITED | price per item key, no NBT |
+| `showkit` | IMPLEMENTED | — |
+| `editsign` | LIMITED | target block approximated to 5 blocks |
+| `skull` | LIMITED | no player profile/texture |
+| `smithingtable` | IMPLEMENTED | — |
+| `socialspy` | LIMITED | only copies this plugin's /r and /mail |
+| `spawner` | LIMITED | set_block_by_name without mob type NBT |
+| `spawnmob` | IMPLEMENTED | — |
+| `speed` | IMPLEMENTED | — |
+| `stonecutter` | ADDED NOW | real audit gap, implemented in this iteration |
+| `sudo` | LIMITED | blocklist of dangerous commands; runs with the target's permissions |
+| `suicide` | IMPLEMENTED | — |
+| `tempban` | IMPLEMENTED | — |
+| `tempbanip` | LIMITED | WIT API does not expose IP ban management; only /tempban by UUID |
+| `thunder` | IMPLEMENTED | — |
+| `time` | COVERED | Pumpkin core (/time) |
+| `togglejail` | IMPLEMENTED | — |
+| `top` | LIMITED | uses get_top_block_y without safe-location search |
+| `tp` | COVERED | Pumpkin core (/tp) |
+| `tpa` | IMPLEMENTED | — |
+| `tpaall` | IMPLEMENTED | — |
+| `tpaccept` | IMPLEMENTED | — |
+| `tpahere` | IMPLEMENTED | — |
+| `tpall` | IMPLEMENTED | — |
+| `tpauto` | IMPLEMENTED | — |
+| `tpacancel` | IMPLEMENTED | — |
+| `tpdeny` | IMPLEMENTED | — |
+| `tphere` | IMPLEMENTED | — |
+| `tpo` | IMPLEMENTED | — |
+| `tpohere` | LIMITED | API does not allow moving offline entities |
+| `tppos` | IMPLEMENTED | — |
+| `tpr` | IMPLEMENTED | — |
+| `tptoggle` | IMPLEMENTED | — |
+| `tree` | LIMITED | simplified oak generation |
+| `unban` | COVERED | Pumpkin core (/pardon) |
+| `unbanip` | COVERED | Pumpkin core (/pardonip) |
+| `unlimited` | LIMITED | no reliable item-consumption event to restock |
+| `vanish` | IMPLEMENTED | — |
+| `warp` | IMPLEMENTED | — |
+| `warpinfo` | IMPLEMENTED | — |
+| `weather` | COVERED | Pumpkin core (/weather) |
+| `whois` | IMPLEMENTED | — |
+| `workbench` | IMPLEMENTED | — |
+| `world` | LIMITED | teleports to world spawn, no Nether scaling |
+| `worth` | LIMITED | price per item key, no NBT |
 
-## Limitaciones generales
+## General limitations
 
-- La API WIT 0.1 de Pumpkin no expone NBT arbitrario de objetos ni de block entities: no se pueden fijar encantamientos, durabilidad, efectos de poción, textura de cabezas ni tipo de mob en spawners.
-- No existe hora por jugador: `/ptime` modifica el mundo. El clima sí es por jugador.
-- No hay bangroup/IP management desde plugins: `/tempbanip` queda LIMITADO; los baneos de nombre propios viven en `state.json` y no reemplazan al banco del núcleo.
-- La mensajería privada de PumpChat no se puede interceptar sin duplicar `/msg`: `/msgtoggle`, `/socialspy`, `/ignore`, `/r` y `/rtoggle` cubren solo la mensajería interna de EssentialsFusion.
-- Las confirmaciones destructivas se guardan en memoria (se pierden al recargar); la preferencia de `/clearinventory` sí persiste en `state.json`.
-- Los archivos de datos (`config.json`, `homes.json`, `warps.json`, `state.json` schema 2, `economy.json` schema 1, `kits.json` schema 1) se mantienen y sus migraciones son read-only con escritura diferida al primer tick.
+- Pumpkin's WIT 0.1 API does not expose arbitrary item or block entity NBT: enchantments, durability, potion effects, head textures, and spawner mob types cannot be set.
+- There is no per-player time: `/ptime` changes the world. Weather is per-player.
+- No ban group/IP management from plugins: `/tempbanip` remains LIMITED; own-name bans live in `state.json` and do not replace the core ban list.
+- PumpChat private messaging cannot be intercepted without duplicating `/msg`: `/msgtoggle`, `/socialspy`, `/ignore`, `/r`, and `/rtoggle` cover only EssentialsPumpkinX's internal messaging.
+- Destructive confirmations are stored in memory (lost on reload); the `/clearinventory` preference does persist in `state.json`.
+- Data files (`config.json`, `homes.json`, `warps.json`, `state.json` schema 2, `economy.json` schema 1, `kits.json` schema 1) are preserved, and their migrations are read-only with a deferred write on the first tick.

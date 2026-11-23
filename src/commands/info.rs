@@ -1,6 +1,3 @@
-//! Información: /ping, /playtime, /near, /seen, /whois, /info, /gc,
-//! /compass, /depth y /getpos.
-
 use crate::{
     cmdutil::{fail, greedy_arg, greedy_node, has_level, no_arg, one_arg, optional_target, player_of, plain, reg, say, target_of, unavailable, word, CmdResult},
     extras::{self, NearEntry},

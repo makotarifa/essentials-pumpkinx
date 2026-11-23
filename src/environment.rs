@@ -1,4 +1,4 @@
-//! Funciones puras para /ptime, /pweather y confirmaciones destructivas.
+//! Pure helpers for /ptime, /pweather and destructive confirmations.
 
 use crate::state::PersistedState;
 use std::collections::HashMap;
